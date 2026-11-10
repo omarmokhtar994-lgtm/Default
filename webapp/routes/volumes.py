@@ -275,7 +275,7 @@ def register(app, ctx) -> None:
             whole_total = f.get("total")                                # the number typed is the whole program's, whichever site is shown
             f = vb.for_site(key, f, site or None)
             show_zone = _show_zone(vb, key)
-            f = vb.view_in(key, f, week, show_zone)                    # the grids read in the zone asked for (the program's own unless the person picked another)
+            f = vb.view_in(key, f, week, show_zone, site or None)      # the grids read in the zone asked for (the program's own unless the person picked another)
             every = _every(vb, key)
             f = vb.view_every(f, every)                                # Phase BM: then every 30 or 60 minutes, as asked
             step = f["step"]
@@ -296,12 +296,19 @@ def register(app, ctx) -> None:
         elif tab == "how":
             week = _week(key, request.values.get("week", ""), today - timedelta(weeks=1))
             on = _date(request.values.get("on", ""))
-            r0 = vb.report(key, channel, week)
+            show_zone = _show_zone(vb, key)                            # Phase BM: the week's report in the zone asked for
+            try:
+                r0 = vb.report(key, channel, week, zone=show_zone)
+            except ValueError as exc:
+                flash(f"{exc} The week is shown in the program's own time zone.")
+                show_zone = vb.zone(key)
+                r0 = vb.report(key, channel, week)
+            ctxt.update(show_zone=show_zone, show_name=dict(ZONES)[show_zone].split(" (")[0])
             if on is None or not week <= on <= week + timedelta(days=6):
                 idx = next((i for i, d in enumerate(r0["actual"]) if sum(d)), 0)
                 on = date.fromisoformat(r0["dates"][idx])
             every = _every(vb, key)
-            r = vb.report_every(vb.report(key, channel, week, on=on), every)   # Phase BM: every 30 or 60 minutes, as asked
+            r = vb.report_every(vb.report(key, channel, week, on=on, zone=show_zone), every)   # Phase BM: every 30 or 60 minutes, as asked
             step = r["step"]
             ctxt.update(every=every, every_links=_every_links(vb, key, "how", every))
             day = r["dates"].index(on.isoformat()) if on.isoformat() in r["dates"] else 0
@@ -539,7 +546,10 @@ def register(app, ctx) -> None:
                 vb.set_zone(key, request.form["zone"], g.user["id"])
             vb.set_settings(key, data, g.user["id"])
             if hours:
-                vb.set_open_hours(key, hours, g.user["id"])
+                typed_in = request.form.get("hours_tz", "").strip() or None   # Phase BM: hours typed in another zone are kept in the program's
+                if typed_in is not None and typed_in not in dict(ZONES):
+                    raise ValueError("The time zone the hours are typed in is one of the zones in the list.")
+                vb.set_open_hours(key, hours, g.user["id"], typed_in=typed_in, on=_today())
         except ValueError as exc:
             flash(str(exc))
             return _render("settings")
@@ -675,7 +685,7 @@ def register(app, ctx) -> None:
             f = vb.view_every(f, every)
             values = f.get("calls") if what == "calls" else f.get("needs")
         elif what in ("actual", "otf"):
-            r = vb.report_every(vb.report(key, channel, week), every)
+            r = vb.report_every(vb.report(key, channel, week, zone=_show_zone(vb, key)), every)
             values = r["actual"] if what == "actual" else (r["otf"] and [[None if v is None else round(v, 1) for v in row] for row in r["otf"]])
         else:
             abort(404)

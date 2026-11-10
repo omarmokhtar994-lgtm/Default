@@ -151,13 +151,22 @@ class VolumeBook:
         saved = saved if isinstance(saved, dict) else {}
         return {ch: H.read(saved.get(ch)) for ch in CHANNELS}
 
-    def set_open_hours(self, key: str, data: Dict[str, Dict[str, Any]], user_id: Optional[int]) -> None:
-        """Save the hours of some channels (merged with what is kept). Everything is checked first: nothing is saved when anything is wrong."""
+    def set_open_hours(self, key: str, data: Dict[str, Dict[str, Any]], user_id: Optional[int], typed_in: Any = None, on: Optional[date] = None) -> None:
+        """Save the hours of some channels (merged with what is kept). Everything is checked first: nothing is saved when anything is wrong.
+        ``typed_in`` (Phase BM): the zone the hours were typed in; they are kept in the program's zone, moved by the difference between the two on
+        the day ``on`` (today)."""
         merged = self.open_hours(key)
+        move = 0 if typed_in in (None, self.zone(key)) else Z.minutes_between(typed_in, self.zone(key), on or datetime.now(EGYPT).date())
         for channel, hours in data.items():
             if channel not in CHANNELS:
                 raise ValueError("The channel is Phone, Chat or Email.")
-            merged[channel] = H.read(hours)
+            read = H.read(hours)
+            if move:
+                try:
+                    read = H.read({**read, "days": Z.shift_hours(read["days"], move)})
+                except ValueError as exc:
+                    raise ValueError(f"{channel}: {exc}") from None
+            merged[channel] = read
         self.store.set_volume_settings(key, {**(self.store.volume_settings(key) or {}), "hours": merged}, user_id)
 
     # ---------------------------------------------------------------- sites (Phase BL)
@@ -759,21 +768,44 @@ class VolumeBook:
                                             "them. Open that day on the Settings tab, or move the volume.")
         return out
 
-    def view_in(self, key: str, f: Dict[str, Any], week_start: date, zone: Any) -> Dict[str, Any]:
-        """The forecast ``f`` with its grids read in ``zone`` (a copy; ``f`` itself is untouched). The program's own zone, or a forecast with no grid, comes back as it is."""
+    def view_in(self, key: str, f: Dict[str, Any], week_start: date, zone: Any, site: Optional[str] = None) -> Dict[str, Any]:
+        """The forecast ``f`` with its grids read in ``zone`` (a copy; ``f`` itself is untouched). The program's own zone, or a forecast with no grid,
+        comes back as it is. Phase BM: the hours past the week's edge come from the neighbouring weeks' saved forecasts (``site``'s share of them when
+        ``f`` is a site's); where a neighbour has none saved, this week's own pattern stands in for it. ``edge`` says which: "saved", "pattern" or
+        "mixed"."""
         Z.check_zone(zone, "The zone to show")
         own = self.zone(key)
         if zone == own or not f.get("calls"):
             return f
         step = f["step"]
+        beside: List[Optional[Dict[str, Any]]] = []
+        for weeks in (-1, 1):
+            other = week_start + timedelta(weeks=weeks)
+            found = None
+            saved = self.store.volume_forecast(key, f["channel"], other.isoformat())
+            if saved and saved.get("grid"):
+                try:
+                    got = self.for_site(key, self.forecast(key, f["channel"], other), site)
+                    if got.get("source") == "saved" and got.get("calls") and len(got["calls"][0]) == len(f["calls"][0]):
+                        found = got
+                except ValueError:
+                    found = None
+            beside.append(found)
+        before, after = beside
+
+        def part(name: str, combine: str) -> List[List[Any]]:
+            return Z.stitch(before[name] if before and before.get(name) else None, f[name], after[name] if after and after.get(name) else None,
+                            week_start, own, zone, step, combine)
+
         out = dict(f)
-        out["calls"] = Z.rotate_grid(f["calls"], week_start, own, zone, step, "sum")
+        out["calls"] = part("calls", "sum")
         if f.get("needs"):
-            out["needs"] = Z.rotate_grid(f["needs"], week_start, own, zone, step, "max")
+            out["needs"] = part("needs", "max")
         if f.get("service"):
-            out["service"] = Z.rotate_grid(f["service"], week_start, own, zone, step, "first")
+            out["service"] = part("service", "first")
         out["day_totals"] = {d: sum(out["calls"][d]) for d in range(7)}
         out["show_zone"] = zone
+        out["edge"] = "saved" if before and after else ("pattern" if not before and not after else "mixed")
         return out
 
     # ---------------------------------------------------------------- Phase BM: the same numbers every 30 or every 60 minutes
@@ -893,13 +925,21 @@ class VolumeBook:
         return out.getvalue()
 
     # ---------------------------------------------------------------- how did we do
-    def _actual(self, key: str, channel: str, week_start: date) -> Tuple[List[List[int]], List[List[Optional[float]]], List[date]]:
+    def _actual(self, key: str, channel: str, week_start: date, zone: Optional[str] = None) -> Tuple[List[List[int]], List[List[Optional[float]]], List[date]]:
         step, slots = self.step(key), self._slots(key)
         dates: List[Optional[date]] = [None] * 7
         for k in range(7):
             d = week_start + timedelta(days=k)
             dates[site_day(d.weekday())] = d
-        rows = self.store.volume_rows(key, channel, week_start.isoformat(), (week_start + timedelta(days=6)).isoformat())
+        if zone is None:
+            rows = self.store.volume_rows(key, channel, week_start.isoformat(), (week_start + timedelta(days=6)).isoformat())
+        else:  # Phase BM: the week as read in another zone, from the real days either side of it
+            held = self.store.volume_rows(key, channel, (week_start - timedelta(days=1)).isoformat(), (week_start + timedelta(days=7)).isoformat())
+            moved, problems = Z.convert_rows([(r["day"], r["minute"], r["offered"], r["aht"]) for r in held], self.zone(key), zone, step)
+            if problems:
+                raise ValueError(problems[0])
+            inside = {d.isoformat() for d in dates if d is not None}
+            rows = [{"day": d, "minute": m, "offered": v, "aht": a} for d, m, v, a in moved if d in inside]
         offered = [[0.0] * slots for _ in range(7)]
         aht_sum = [[0.0] * slots for _ in range(7)]
         aht_vol = [[0.0] * slots for _ in range(7)]
@@ -924,14 +964,17 @@ class VolumeBook:
         f = self.forecast(key, channel, week_start)
         return None if f["error"] else f
 
-    def report(self, key: str, channel: str, week_start: date, on: Optional[date] = None) -> Dict[str, Any]:
-        """How the week starting ``week_start`` went for one channel: offered over forecast, the trend, and for the day ``on`` the staffing lines."""
+    def report(self, key: str, channel: str, week_start: date, on: Optional[date] = None, zone: Any = None) -> Dict[str, Any]:
+        """How the week starting ``week_start`` went for one channel: offered over forecast, the trend, and for the day ``on`` the staffing lines.
+        ``zone`` (Phase BM): read the week in that zone instead of the program's: the offered from the real neighbouring days, the forecast from the
+        neighbouring weeks' saved ones. The staffing lines follow the schedule, which is in the program's zone, so they are left out then."""
         if channel not in CHANNELS:
             raise ValueError("The channel is Phone, Chat or Email.")
         _check_week(week_start)
         s = self.settings(key)[channel]
         step = self.step(key)
-        actual, actual_aht, dates = self._actual(key, channel, week_start)
+        other = zone if zone is not None and Z.check_zone(zone, "The zone to show") != self.zone(key) else None
+        actual, actual_aht, dates = self._actual(key, channel, week_start, other)
         actual_total = sum(sum(d) for d in actual)
         out: Dict[str, Any] = {"channel": channel, "week_start": week_start.isoformat(), "step": step, "days": list(DAY_NAMES),
                                "dates": [d.isoformat() for d in dates], "actual": actual, "actual_total": actual_total, "forecast": None,
@@ -940,6 +983,14 @@ class VolumeBook:
         if not actual_total:
             out["note"] = "No actual volume has been uploaded for this week."
         fc = self._otf_week(key, channel, week_start)
+        if other is not None:
+            out["show_zone"] = other
+            on = None
+            if fc is not None:
+                beside = [self._otf_week(key, channel, week_start + timedelta(weeks=w)) for w in (-1, 1)]
+                calls = Z.stitch(beside[0]["calls"] if beside[0] else None, fc["calls"], beside[1]["calls"] if beside[1] else None,
+                                 week_start, self.zone(key), other, step, "sum")
+                fc = {**fc, "calls": calls, "total": sum(map(sum, calls))}
         if fc is None and not out["note"]:
             out["note"] = "No forecast was saved for this week, so there is no offered-over-forecast figure. Save one on the Forecast tab."
         if fc is not None and actual_total:

@@ -124,3 +124,70 @@ def rotate_grid(grid: Sequence[Sequence[Any]], week_start: date, from_zone: Any,
             elif out[j][k] is None:
                 out[j][k] = value
     return out
+
+
+def stitch(before: Optional[Sequence[Sequence[Any]]], this: Sequence[Sequence[Any]], after: Optional[Sequence[Sequence[Any]]], week_start: date,
+           from_zone: Any, to_zone: Any, step: int, combine: str = "sum") -> List[List[Any]]:
+    """Phase BM: the week starting ``week_start`` read in ``to_zone``, from three weeks of grids kept in ``from_zone`` (the week before, the week,
+    the week after; days Sun to Sat). The hours past the week's edge come from the neighbouring week; a neighbour that is None is taken to look like
+    this week (which is what ``rotate_grid`` assumes for both). ``combine`` as in ``rotate_grid``."""
+    src_key, dst_key = check_zone(from_zone, "The zone the grid is in"), check_zone(to_zone, "The zone to show")
+    slots = 1440 // step if step and 1440 % step == 0 else 0
+    if not slots or any(g is not None and (len(g) != 7 or any(len(r) != slots for r in g)) for g in (before, this, after)) or this is None:
+        raise ValueError("A week's grid is seven days of whole intervals.")
+    if combine not in ("sum", "max", "first"):
+        raise ValueError("Cells that land together are added, or the larger is taken, or the first is kept.")
+    if src_key == dst_key:
+        return [list(r) for r in this]
+    src, dst = ZoneInfo(src_key), ZoneInfo(dst_key)
+    out: List[List[Any]] = [[None if combine == "first" else 0 for _ in range(slots)] for _ in range(7)]
+    for offset, grid in ((-7, before if before is not None else this), (0, this), (7, after if after is not None else this)):
+        for d in range(7):
+            day = week_start + timedelta(days=offset + d)
+            for i in range(slots):
+                value = grid[d][i]
+                if value is None:
+                    continue
+                there = (datetime.combine(day, time()) + timedelta(minutes=i * step)).replace(tzinfo=src).astimezone(timezone.utc).astimezone(dst)
+                j = (there.date() - week_start).days
+                if not 0 <= j < 7:
+                    continue
+                k = (there.hour * 60 + there.minute) // step
+                if combine == "sum":
+                    out[j][k] += value
+                elif combine == "max":
+                    out[j][k] = max(out[j][k], value)
+                elif out[j][k] is None:
+                    out[j][k] = value
+    return out
+
+
+def minutes_between(from_zone: Any, to_zone: Any, on: date) -> int:
+    """Minutes to add to a time in ``from_zone`` to read it in ``to_zone`` on the date ``on`` (taken at noon)."""
+    src, dst = check_zone(from_zone, "The zone the hours are typed in"), check_zone(to_zone, "The program's zone")
+    noon = datetime.combine(on, time(12))
+    return int((noon.replace(tzinfo=ZoneInfo(src)).utcoffset() - noon.replace(tzinfo=ZoneInfo(dst)).utcoffset()).total_seconds() // -60)
+
+
+DAY_WORDS = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+
+def shift_hours(days: Dict[str, Any], minutes: int) -> Dict[str, Any]:
+    """Hours worked (weekday "0" = Sunday -> [opens, closes] in minutes, None for closed, absent for unset) moved ``minutes`` later (earlier when
+    negative). A window keeps its length and belongs to the weekday its opening lands on; a day whose hours left and got none is closed; closed and
+    unset days otherwise stay. Two windows landing on one weekday cannot be kept and are refused in words."""
+    if not minutes:
+        return dict(days)
+    out: Dict[str, Any] = {d: None for d, v in days.items() if v is None}
+    landed: Dict[str, List[int]] = {}
+    for d, window in days.items():
+        if window is None:
+            continue
+        start = int(window[0]) + minutes
+        day = str((int(d) + start // 1440) % 7)
+        if day in landed:
+            raise ValueError(f"Moved into the program's time zone, {DAY_WORDS[int(day)]} would have two sets of hours. Type the hours in the program's zone.")
+        landed[day] = [start % 1440, start % 1440 + int(window[1]) - int(window[0])]
+        out.setdefault(str(d), None)                                # where it left: closed unless a window lands there
+    out.update(landed)
+    return out

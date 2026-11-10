@@ -179,6 +179,7 @@ def parse_draft(data: bytes, filename: str, step: int, today: date) -> ParsedVol
             out.rows.update(got.rows)
             out.summary.update(got.summary)
             out.notes.append(f"{channel}: read the week of {week:%a %d %b %Y}.")
+            out.notes += [n for n in got.notes if n not in out.notes]  # Phase BM: what the reading said (hourly rows shared over their intervals)
     if not out.problems and not out.rows:
         out.problems.append("The draft has no numbers in it.")
     if out.problems:

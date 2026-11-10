@@ -19,16 +19,17 @@
   <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'outlook': 'the months ahead', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
   <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
 </div></div>
-<p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.{% if show_zone is defined and show_zone != zone %} This page is shown in {{ show_name }} time; nothing that is kept changes.{% elif tab in ('forecast', 'how') %} Pick another zone under "Show times in" to read this page in it; nothing that is kept changes.{% endif %}</p>
+<p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.{% if show_zone is defined and show_zone != zone %} This page is shown in {{ show_name }} time; nothing that is kept changes.{% elif tab in ('forecast', 'staffing', 'how') %} Pick another zone under "Show times in" to read this page in it; nothing that is kept changes.{% endif %}</p>
 <nav class="bp-days" aria-label="Volumes">{% for t, name in tabs %}<a href="{{ url_for('volumes_page', tab=t, program=key, channel=channel) }}"{% if t == tab %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
 {% if tab != 'actuals' and tab != 'settings' %}<p class="chan" role="group" aria-label="Channel">{% for ch in channels %}<a class="button{% if ch == channel %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=ch, week=week.isoformat() if week is defined else none, every=every if every is defined and every != step else none) }}"{% if ch == channel %} aria-current="true"{% endif %}>{{ ch }}</a> {% endfor %}</p>
 {% if every_links is defined and every_links|length > 1 %}<p class="chan" role="group" aria-label="Interval"><span class="dim">Every</span>{% for v, href, chosen in every_links %} <a class="button{% if chosen %} primary{% endif %}" href="{{ href }}"{% if chosen %} aria-current="true"{% endif %}>{{ v }} minutes</a>{% endfor %}</p>
 {% if every != step %}<p class="notice calm" role="status">Shown every {{ every }} minutes: contacts are added up, and people needed is the larger of the {{ step }}-minute intervals inside each one. The requirement tabs for the schedule stay at {{ step }} minutes.</p>{% endif %}{% endif %}
-{% if tab in ('forecast', 'outlook') and site_names %}{% set wk = week.isoformat() if week is defined else none %}<p class="chan" role="group" aria-label="Site"><span class="dim">Site</span> <a class="button{% if not site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, months=months_text, level=level) }}"{% if not site %} aria-current="true"{% endif %}>All sites</a>{% for n in site_names %} <a class="button{% if n == site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, site=n, months=months_text, level=level) }}"{% if n == site %} aria-current="true"{% endif %}>{{ n }}</a>{% endfor %}</p>
+{% if tab in ('forecast', 'staffing', 'outlook') and site_names %}{% set wk = week.isoformat() if week is defined else none %}<p class="chan" role="group" aria-label="Site"><span class="dim">Site</span> <a class="button{% if not site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, months=months_text, level=level) }}"{% if not site %} aria-current="true"{% endif %}>All sites</a>{% for n in site_names %} <a class="button{% if n == site %} primary{% endif %}" href="{{ url_for('volumes_page', tab=tab, program=key, channel=channel, week=wk, site=n, months=months_text, level=level) }}"{% if n == site %} aria-current="true"{% endif %}>{{ n }}</a>{% endfor %}</p>
 {% if site and tab == 'forecast' %}<p class="notice calm">This is {{ site }}'s share of the contacts and the people that share needs. The number you type is for the whole program, and the figures for the other sites add up to it.</p>{% elif site %}<p class="notice calm">This is {{ site }}'s share of the contacts. The figures for the other sites add up to the whole program's.</p>{% endif %}{% endif %}{% endif %}
 
 {# ------------------------------------------------------------------ actuals #}
 {% if tab == 'actuals' %}
+{% if not (coverage.Phone.days or coverage.Chat.days or coverage.Email.days) %}<p class="notice calm" role="status"><b>Start here.</b> Add what really came in (step 1), type the week's contacts on the Forecast tab (step 2), then read the people needed on the Staffing tab (step 3). A few weeks of history is enough to start; a year or more lets the site see the seasons.</p>{% endif %}
 <section class="panel" aria-labelledby="held-h"><h2 id="held-h">What is held</h2>
   <table class="edgrid"><thead><tr><th scope="col">Channel</th><th scope="col">Days</th><th scope="col">First</th><th scope="col">Last</th><th scope="col">Weeks</th></tr></thead>
   <tbody>{% for ch in channels %}{% set c = coverage[ch] %}<tr><th scope="row">{{ ch }}</th><td>{{ c.days }}</td><td>{{ c.first or '-' }}</td><td>{{ c.last or '-' }}</td><td>{{ c.weeks|length }}</td></tr>{% endfor %}</tbody></table>
@@ -96,9 +97,29 @@
 {% else %}<p class="notice calm">You can look at volumes; a planner or supervisor adds them.</p>{% endif %}
 {% endif %}
 
+{# ---- the people needed and the files the schedule reads: on the Forecast tab and on the Staffing tab (Phase BM) #}
+{% macro needs_panel() %}{% if needs_grid %}
+<section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
+  <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
+  {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
+  {% if site_names %}<p>{% for n in site_names %}<a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat(), site=n) }}">Download {{ n }}'s requirement tabs (Excel)</a> {% endfor %}</p>{% endif %}
+  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel){% if site_names %} for all sites{% endif %}</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
+  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = fx.update({'show_tz': show_zone}) %}{% endif %}
+  <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
+  <details><summary>Use =AGENTS() in your own Excel</summary>
+    <p class="dim">In Excel 365, add the function once: Formulas, Name Manager, New. Type the name (AGENTS), paste its definition into Refers to, press OK. Then =AGENTS(calls, handle time, interval seconds, target as a fraction, answer seconds, highest occupancy as a fraction). The workbook above has the same calculation as an ordinary formula that needs no setup and works in every Excel.</p>
+    <div class="vol-copy"><button type="button" class="button" data-copy-text="#agents-lambda">Copy the definitions</button><span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
+    <pre id="agents-lambda" class="vol-pre" tabindex="0" role="region" aria-label="Definitions of AGENTS and SERVICELEVEL for Excel">{{ lambda_text }}</pre></details>
+</section>
+{% endif %}{% endmacro %}
 {# ------------------------------------------------------------------ forecast #}
 {% if tab == 'forecast' %}
 {% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
+<p class="notice calm" id="fc-summary" role="status"><b>Week of {{ week.strftime('%a %d %b %Y') }}, {{ channel|lower }}.</b>
+  {% if f.calls %}{{ '{:,}'.format(f.total) }} contacts{% if f.source == 'saved' %}, saved{% else %}, not saved yet{% endif %}.{% if erlang and peak_needed is defined %} At the peak {{ peak_needed }} {{ 'person is' if peak_needed == 1 else 'people are' }} needed on the floor; the Staffing tab has every interval.{% endif %}
+  {% elif f.needs_total %}Type the contacts you expect for the week and press Work it out.{% if f.suggestion %} The history suggests {{ '{:,}'.format(f.suggestion.final) }}{% if f.suggestion.low is not none %} ({{ '{:,}'.format(f.suggestion.low) }} to {{ '{:,}'.format(f.suggestion.high) }}){% endif %}.{% endif %}
+  {% else %}There is nothing to forecast from yet: add actual volumes on the Data tab first.{% endif %}
+  {% if f.accuracy and f.accuracy.methods.trend.wape is not none %}On your last {{ f.accuracy.tested }} clean weeks the trend was off by {{ '%.1f' % (100 * f.accuracy.methods.trend.wape) }}% on average.{% endif %}</p>
 {% macro carry() %}{% if every != step %}<input type="hidden" name="every" value="{{ every }}">{% endif %}{% if site %}<input type="hidden" name="site" value="{{ site }}">{% endif %}{% if show_zone != zone %}<input type="hidden" name="show_tz" value="{{ show_zone }}">{% endif %}<input type="hidden" name="hist_weeks" value="{{ hist_weeks }}"><input type="hidden" name="base" value="{{ base }}"><input type="hidden" name="skip_sent" value="1">{% for w in skip %}<input type="hidden" name="skip" value="{{ w }}">{% endfor %}{% if total_text %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}{% endmacro %}
 <form method="post" action="{{ url_for('volumes_forecast') }}" class="panel ins-filter" aria-label="Choose the week and type the calls">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="day" value="{{ day_names[day] }}"><input type="hidden" name="skip_sent" value="1">
@@ -249,23 +270,39 @@
   <p class="dim">Intervals down the side, Sunday to Saturday across. Press Copy for Excel and paste into a sheet. {% if f.weeks %}Every weekday is read from the same {{ f.weeks.used|length }} whole weeks{% if f.weeks.short %} (fewer than the {{ f.weeks.wanted }} asked for: not enough clean weeks){% endif %}, so there are as many Saturdays as Sundays behind the shape.{% endif %}{% if f.profile and f.profile.closed %} Closed: {{ f.profile.closed|join(', ') }}.{% endif %}</p>
   {{ grid_table('tbl-calls', 'Forecast contacts', calls_grid, 'calls') }}
 </section>
-{% if needs_grid %}
-<section class="panel" aria-labelledby="g2"><h2 id="g2">People needed on the floor, like FT Wise</h2>
-  <p class="dim">{{ channel }}: {% if channel == 'Phone' %}Erlang C to a service level{% elif channel == 'Chat' %}Erlang C with chats at once{% else %}the workload method{% endif %}, handle time {{ f.aht|round|int }} s, highest occupancy and the rest from the Settings tab. Erlang C assumes nobody abandons, so it over-staffs where callers do. These are people on the floor; the engine adds the program's shrinkage when it builds the schedule.</p>
-  {{ grid_table('tbl-needs', 'People needed on the floor', needs_grid, 'needs') }}
-  {% if site_names %}<p>{% for n in site_names %}<a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat(), site=n) }}">Download {{ n }}'s requirement tabs (Excel)</a> {% endfor %}</p>{% endif %}
-  <p><a class="button" href="{{ url_for('volumes_requirements', program=key, week=week.isoformat()) }}">Download the requirement tabs (Excel){% if site_names %} for all sites{% endif %}</a> <span class="dim">FT Wise and a tab per channel, from each channel's saved forecast, in {{ zone_name }} time, laid out for the input workbook. Save a forecast for a channel first.</span></p>
-  {% set fx = {'program': key, 'channel': channel, 'week': week.isoformat()} %}{% if f.source != 'saved' %}{% set _ = fx.update({'total': f.total}) %}{% endif %}{% set _ = fx.update({'hist_weeks': hist_weeks, 'base': base, 'skip_sent': 1, 'skip': skip}) %}{% if show_zone != zone %}{% set _ = fx.update({'show_tz': show_zone}) %}{% endif %}
-  <p><a class="button" href="{{ url_for('volumes_formulas', **fx) }}">Download with live =AGENTS formulas (Excel)</a> <span class="dim">This channel's contacts and the people needed worked out by Excel formulas you can change, with the site's figures beside them.</span></p>
-  <details><summary>Use =AGENTS() in your own Excel</summary>
-    <p class="dim">In Excel 365, add the function once: Formulas, Name Manager, New. Type the name (AGENTS), paste its definition into Refers to, press OK. Then =AGENTS(calls, handle time, interval seconds, target as a fraction, answer seconds, highest occupancy as a fraction). The workbook above has the same calculation as an ordinary formula that needs no setup and works in every Excel.</p>
-    <div class="vol-copy"><button type="button" class="button" data-copy-text="#agents-lambda">Copy the definitions</button><span class="dim" data-copy-note role="status" aria-live="polite"></span></div>
-    <pre id="agents-lambda" class="vol-pre" tabindex="0" role="region" aria-label="Definitions of AGENTS and SERVICELEVEL for Excel">{{ lambda_text }}</pre></details>
-</section>
-{% endif %}
+{{ needs_panel() }}
 <section class="panel" aria-labelledby="g3"><h2 id="g3">{{ day_names[day] }}, interval by interval</h2>
   <p class="dim">{% for n in day_names %}<a href="{{ url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat(), day=n, total=total_text or none) }}"{% if loop.index0 == day %} aria-current="true"{% endif %}>{{ n }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
   <h3>Contacts</h3>{{ chart_calls }}{% if chart_people %}<h3>People needed on the floor</h3>{{ chart_people }}{% endif %}
+</section>
+{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ staffing (Phase BM) #}
+{% if tab == 'staffing' %}
+{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}
+<form method="get" action="{{ url_for('volumes_page') }}" class="panel ins-filter" aria-label="Choose the week">
+  <input type="hidden" name="tab" value="staffing"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}">{% if every != step %}<input type="hidden" name="every" value="{{ every }}">{% endif %}{% if site %}<input type="hidden" name="site" value="{{ site }}">{% endif %}{% if total_text and f.source != 'saved' %}<input type="hidden" name="total" value="{{ total_text }}">{% endif %}
+  <div class="exp-row"><label>Week starting <select name="week">{% for w in weeks %}<option value="{{ w.iso }}"{% if w.iso == week.isoformat() %} selected{% endif %}>{{ w.text }}</option>{% endfor %}</select></label>
+    <label>Show times in <select name="show_tz">{% for k, n in zones %}<option value="{{ k }}"{% if k == show_zone %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label></div>
+  <p><button class="primary" type="submit">Show</button></p></form>
+{% set to_forecast = url_for('volumes_page', tab='forecast', program=key, channel=channel, week=week.isoformat()) %}
+{% if not erlang %}<p class="notice calm" role="status">This program does not use a service level, so there are no people to work out from the contacts: its schedule reads the requirement per interval as it is. The contacts are on the <a href="{{ to_forecast }}">Forecast tab</a>.</p>
+{% elif not f.calls %}<p class="notice calm" role="status">There is no forecast for this week yet. <a href="{{ to_forecast }}">Type the week's contacts on the Forecast tab</a> and save it; the people needed for every interval then show here.</p>
+{% else %}
+<p class="notice calm" role="status"><b>Week of {{ week.strftime('%a %d %b %Y') }}, {{ channel|lower }}.</b> People needed on the floor for {{ '{:,}'.format(f.total) }} contacts{% if f.source == 'saved' %} (the saved forecast){% else %} (not saved yet: <a href="{{ to_forecast }}">save it on the Forecast tab</a> before the schedule reads it){% endif %}, at a handle time of {{ f.aht|round|int }} seconds.</p>
+{% if show_zone != zone %}<p class="notice calm" role="status">Shown in {{ show_name }} time. The requirement tabs for the schedule are always in {{ zone_name }} time.</p>{% endif %}
+<section class="tiles" aria-label="The week's staffing in numbers">
+  <p class="tile"><span class="tile-label">Needed on the floor at the peak</span><b>{{ peak_needed }}</b><small>the engine adds shrinkage itself</small></p>
+  <p class="tile"><span class="tile-label">Hours needed on the floor</span><b>{{ '{:,}'.format(hours_needed|round|int) }} h</b><small>over the week</small></p>
+  <p class="tile"><span class="tile-label">Busiest interval</span><b>{{ busiest[0] }} {{ '%02d:%02d' % (busiest[1] // 60, busiest[1] % 60) }}</b><small>{{ busiest[2] }} contacts</small></p>
+</section>
+{{ needs_panel() }}
+<section class="panel" aria-labelledby="st-hours"><h2 id="st-hours">Hours {{ channel|lower }} is worked</h2>
+  {% set set_days = hours_rows|selectattr('from')|list %}{% set closed_days = hours_rows|selectattr('closed')|list %}
+  {% if set_days or closed_days %}<p>{% for r in hours_rows %}{% if r.closed %}{{ r.name }} closed{% elif r.from %}{{ r.name }} {{ r.from }} to {{ r.to }}{% else %}{{ r.name }} all day{% endif %}{{ ', ' if not loop.last }}{% endfor %} ({{ zone_name }} time).</p>
+  <p class="dim">Outside these hours nobody is planned{% if channel != 'Email' %}, and inside them every interval has at least the minimum cover{% endif %}. <a href="{{ url_for('volumes_page', tab='settings', program=key) }}">Change the hours on the Settings tab</a>.</p>
+  {% else %}<p>No hours are set, so people are planned wherever there are contacts. <a href="{{ url_for('volumes_page', tab='settings', program=key) }}">Set the hours on the Settings tab</a> to plan nobody outside them{% if channel != 'Email' %} and keep a minimum cover inside them{% endif %}.</p>{% endif %}
 </section>
 {% endif %}
 {% endif %}

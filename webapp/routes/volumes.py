@@ -31,7 +31,9 @@ from ..volumes_formulas import formulas_workbook
 from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes, parse_grid, parse_long, parse_pasted, read_table
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-TABS = (("actuals", "Actuals"), ("forecast", "Forecast and needs"), ("outlook", "Months ahead"), ("how", "How we did"), ("settings", "Settings"))
+# Phase BM (owner: "simple and easy to use"): three numbered steps, then the longer views and the settings; the old tab names in addresses still work
+TABS = (("actuals", "1. Data"), ("forecast", "2. Forecast"), ("staffing", "3. Staffing"), ("outlook", "Months ahead"), ("how", "How we did"),
+        ("settings", "Settings"))
 HELD_MINUTES = 20
 BASIS_WORDS = {"learned": "learned from the history", "unseen": "no seasonal pattern yet", "typed": "your typed index", "trend": "trend only"}
 MAX_PASTE = 400_000
@@ -258,7 +260,7 @@ def register(app, ctx) -> None:
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
             ctxt["hourly"] = {ch: len(vb.hourly_days(key, ch)) for ch in CHANNELS}  # Phase BM: days with volume only on the hour
-        elif tab == "forecast":
+        elif tab in ("forecast", "staffing"):                           # Phase BM: staffing is the same week's forecast, read for its people needed
             week = _week(key, request.values.get("week", ""), today + timedelta(weeks=1))
             typed_total = request.values.get("total", "").strip()
             typed_days = _typed_days()
@@ -280,7 +282,7 @@ def register(app, ctx) -> None:
             f = vb.view_every(f, every)                                # Phase BM: then every 30 or 60 minutes, as asked
             step = f["step"]
             day = DAY_NAMES.index(request.values.get("day", "Mon")) if request.values.get("day", "Mon") in DAY_NAMES else 1
-            ctxt.update(every=every, every_links=_every_links(vb, key, "forecast", every), week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
+            ctxt.update(every=every, every_links=_every_links(vb, key, tab, every), hours_rows=_hours_view(vb.open_hours(key))[channel]["rows"], week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
                         total_text=typed_total or (f"{whole_total:,}" if whole_total is not None else ""), site=site, site_names=site_names, typed_days=typed_days,
                         calls_grid=vb.grid(f["calls"], step) if f["calls"] else None,
                         needs_grid=vb.grid(f["needs"], step) if f.get("needs") else None,

@@ -4345,3 +4345,92 @@ class TheBlScreensInTheBrowser(unittest.TestCase):
             page.wait_for_load_state("load")
             self.assertRegex(page.locator("#total").input_value(), r"^[\d,]+$")
             page.close()
+
+
+BM_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_bm" / "screens"
+
+
+class TheBmScreensInTheBrowser(unittest.TestCase):
+    """Phase BM (owner, 2026-11-10): the forecast section rebuilt, in a real browser on a desktop and on a phone: the three numbered steps, the
+    interval picked with a click and with the keyboard, the page read in another time zone, the table of methods with a number to take, and the
+    Staffing page. Nothing scrolls the page sideways and every control is a 24 px target."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    seed = TheVolumesInTheBrowser.seed
+    url = TheVolumesInTheBrowser.url
+    sideways = TheBlScreensInTheBrowser.sideways
+    small_targets = TheBlScreensInTheBrowser.small_targets
+
+    def test_the_three_steps_the_interval_and_the_zone(self):
+        vb = self.seed()
+        BM_SCREENS.mkdir(parents=True, exist_ok=True)
+        coarse = vb.every_choices(self.key)[-1]
+        for width, name in ((1280, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            page.goto(self.url("forecast"))
+            nav = page.get_by_role("navigation", name="Volumes")
+            for label in ("1. Data", "2. Forecast", "3. Staffing"):
+                expect(nav.get_by_role("link", name=label)).to_be_visible()
+            page.locator("#total").fill("7000")
+            page.get_by_role("button", name="Work it out").click()
+            expect(page.locator("#fc-summary")).to_contain_text("7,000 contacts, not saved yet")
+            self.assertLessEqual(self.sideways(page), 1, name)
+            self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.screenshot(path=str(BM_SCREENS / f"forecast_{name}.png"), full_page=True)
+            if coarse != vb.step(self.key):
+                group = page.get_by_role("group", name="Interval")
+                link = group.get_by_role("link", name=f"{coarse} minutes")
+                if name == "desktop":
+                    link.click()
+                else:
+                    link.focus()
+                    page.keyboard.press("Enter")
+                expect(page.get_by_text(f"Shown every {coarse} minutes")).to_be_visible()
+                expect(page.locator("#total")).to_have_value("7,000")                    # the number typed came along
+                self.assertEqual(page.locator("#tbl-calls tbody tr").count(), 1440 // coarse)
+            page.get_by_label("Show times in").select_option("America/New_York")
+            page.get_by_role("button", name="Work it out").click()
+            expect(page.get_by_text("Shown in New York time").first).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, name)
+            page.screenshot(path=str(BM_SCREENS / f"forecast_hour_new_york_{name}.png"), full_page=True)
+            page.close()
+
+    def test_a_methods_number_is_taken_with_one_press(self):
+        self.seed()
+        page = self.page(width=1280, height=900)
+        self.sign_in(page)
+        page.goto(self.url("forecast"))
+        if not page.get_by_role("heading", name="How well each method did on your own weeks").is_visible():
+            page.get_by_text("Help with the number (optional)").click()
+        expect(page.get_by_role("heading", name="How well each method did on your own weeks")).to_be_visible()
+        row = page.get_by_role("row").filter(has_text="Last week")
+        said = row.get_by_role("cell").nth(0).inner_text().strip()
+        row.get_by_role("button").click()
+        expect(page.locator("#total")).to_have_value(said)
+        page.screenshot(path=str(BM_SCREENS / "methods_desktop.png"), full_page=True)
+        page.close()
+
+    def test_the_staffing_page(self):
+        self.seed()
+        for width, name in ((1280, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            page.goto(self.url("staffing"))
+            expect(page.get_by_text("There is no forecast for this week yet")).to_be_visible()
+            page.get_by_role("link", name="Type the week's contacts on the Forecast tab").click()
+            page.locator("#total").fill("7000")
+            page.get_by_role("button", name="Save this forecast").click()
+            page.get_by_role("navigation", name="Volumes").get_by_role("link", name="3. Staffing").click()
+            expect(page.get_by_role("heading", name="People needed on the floor, like FT Wise")).to_be_visible()
+            expect(page.get_by_role("link", name="Download the requirement tabs (Excel)")).to_be_visible()
+            self.assertEqual(page.locator("#tbl-calls").count(), 0)
+            self.assertLessEqual(self.sideways(page), 1, name)
+            self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.screenshot(path=str(BM_SCREENS / f"staffing_{name}.png"), full_page=True)
+            page.goto(self.url("forecast"))
+            page.get_by_role("button", name="Remove the saved one").click()
+            page.close()

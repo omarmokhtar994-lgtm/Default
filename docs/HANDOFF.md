@@ -531,6 +531,21 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Phase BM (owner, 2026-11-10): the forecast section rebuilt
+The owner's screens showed a number on the hour and 0 on the half hour, no way to look at 60 minutes, and the zone fixed. Plan:
+`docs/superpowers/plans/2026-11-10-phase-bm-forecast-rebuild.md`; how-to: `docs/howto/FORECAST_INTERVAL_ZONES_METHODS.md`.
+- **Hourly history** (`webapp/volumes_grain.py`): hourly rows and zero-half-hour days are shared over the program's intervals at upload; held days are
+  fixed from the Data tab (`/volumes/actuals/spread-hourly`). Two older tests that pinned "coarser rows are refused" were re-pinned with the reason.
+  **The owner's own history is hourly: after installing, open Data and press the button for each channel.**
+- **Every 30 or 60 minutes** (`Volumes.view_every`, `report_every`, the `every` parameter). The requirement tabs do not follow it.
+- **Zones** (`volumes_zone.stitch`, `shift_hours`): the forecast in another zone takes its edge hours from the saved neighbouring weeks; the report
+  from the real neighbouring days; hours worked can be typed in another zone. Storage is unchanged (the program's zone), not moved to UTC.
+- **Methods** (`webapp/forecast_methods.py`): five methods back-tested on the program's own weeks, shown as a table with "Use this number". Both
+  pre-registered rules for taking the best one automatically failed (`evidence/phase_bm/methods.md`), so the suggestion is still the trend.
+- **Three steps**: tabs "1. Data", "2. Forecast", "3. Staffing" (new, `tab=staffing`), then Months ahead, How we did, Settings.
+- Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
+  with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
+
 ## Installed (2026-11-09)
 The owner installed the audited package (sha256 `75e973f4b4f5d4a7dfb1564cedcd6223875514cd7014b28e49664410c044e8cf`, built from 5470611) with
 `deploy/update.sh`; the website reported `active`. The server's address comes from Cloud Shell's history (the address in

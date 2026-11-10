@@ -114,12 +114,29 @@ def register(app, ctx) -> None:
         asked = request.values.get("show_tz", "")
         return asked if asked in dict(ZONES) else vb.zone(key)
 
+    def _every(vb: VolumeBook, key: str) -> int:
+        """Phase BM: the interval the person asked to see (30 or 60 minutes); the program's own when none. One it cannot show is a 400 in words."""
+        asked = request.values.get("every", "").strip()
+        if not asked:
+            return vb.step(key)
+        if not asked.isdigit() or int(asked) not in vb.every_choices(key):
+            abort(400, description="The intervals can be shown every 30 or 60 minutes, and not finer than the program's own.")
+        return int(asked)
+
+    def _every_links(vb: VolumeBook, key: str, tab: str, every: int) -> List[Tuple[int, str, bool]]:
+        """(minutes, address, chosen) for each interval the program can be seen at; the rest of what the page asked for is kept."""
+        keep = {k: request.values[k] for k in ("channel", "week", "total", "hist_weeks", "base", "day", "show_tz", "site", "on") if request.values.get(k)}
+        if "skip_sent" in request.values:
+            keep.update(skip_sent="1", skip=request.values.getlist("skip")[:80])
+        return [(v, url_for("volumes_page", tab=tab, program=key, **keep, **({} if v == vb.step(key) else {"every": v})), v == every)
+                for v in vb.every_choices(key)]
+
     def _base() -> str:
         return "last_year" if request.values.get("base") == "last_year" else "history"
 
     def _carry() -> Dict[str, Any]:
         """What a page asks for, kept when a form on it sends the person back to it."""
-        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day", "show_tz", "site") if request.form.get(k)}
+        out: Dict[str, Any] = {k: request.form[k] for k in ("total", "hist_weeks", "base", "day", "show_tz", "site", "every") if request.form.get(k)}
         if "skip_sent" in request.form:
             out["skip_sent"] = "1"
             out["skip"] = request.form.getlist("skip")[:80]
@@ -259,8 +276,11 @@ def register(app, ctx) -> None:
             f = vb.for_site(key, f, site or None)
             show_zone = _show_zone(vb, key)
             f = vb.view_in(key, f, week, show_zone)                    # the grids read in the zone asked for (the program's own unless the person picked another)
+            every = _every(vb, key)
+            f = vb.view_every(f, every)                                # Phase BM: then every 30 or 60 minutes, as asked
+            step = f["step"]
             day = DAY_NAMES.index(request.values.get("day", "Mon")) if request.values.get("day", "Mon") in DAY_NAMES else 1
-            ctxt.update(week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
+            ctxt.update(every=every, every_links=_every_links(vb, key, "forecast", every), week=week, week_end=week + timedelta(days=6), weeks=_week_choices(key, today + timedelta(weeks=1), 2, 6), f=f, error=error, day=day,
                         total_text=typed_total or (f"{whole_total:,}" if whole_total is not None else ""), site=site, site_names=site_names, typed_days=typed_days,
                         calls_grid=vb.grid(f["calls"], step) if f["calls"] else None,
                         needs_grid=vb.grid(f["needs"], step) if f.get("needs") else None,
@@ -280,7 +300,10 @@ def register(app, ctx) -> None:
             if on is None or not week <= on <= week + timedelta(days=6):
                 idx = next((i for i, d in enumerate(r0["actual"]) if sum(d)), 0)
                 on = date.fromisoformat(r0["dates"][idx])
-            r = vb.report(key, channel, week, on=on)
+            every = _every(vb, key)
+            r = vb.report_every(vb.report(key, channel, week, on=on), every)   # Phase BM: every 30 or 60 minutes, as asked
+            step = r["step"]
+            ctxt.update(every=every, every_links=_every_links(vb, key, "how", every))
             day = r["dates"].index(on.isoformat()) if on.isoformat() in r["dates"] else 0
             ctxt.update(week=week, weeks=_week_choices(key, today - timedelta(weeks=1), 11, 0), r=r, on=on, day=day,
                         actual_grid=vb.grid(r["actual"], step), otf_grid=vb.grid(r["otf"], step) if r["otf"] else None,
@@ -646,18 +669,20 @@ def register(app, ctx) -> None:
         channel = _channel(request.args.get("channel", ""))
         week = _week(key, request.args.get("week", ""), _today())
         what = request.args.get("what", "calls")
+        every = _every(vb, key)
         if what in ("calls", "needs"):
             f = vb.view_in(key, _plan(vb, key, channel, week, total=request.args.get("total") or None, day_totals=_typed_days()), week, _show_zone(vb, key))
+            f = vb.view_every(f, every)
             values = f.get("calls") if what == "calls" else f.get("needs")
         elif what in ("actual", "otf"):
-            r = vb.report(key, channel, week)
+            r = vb.report_every(vb.report(key, channel, week), every)
             values = r["actual"] if what == "actual" else (r["otf"] and [[None if v is None else round(v, 1) for v in row] for row in r["otf"]])
         else:
             abort(404)
         if not values:
             abort(404)
         name = f"Volumes_{channel}_{what}_{week.isoformat()}.xlsx"
-        return send_file(_sheet(vb.grid(values, vb.step(key)), f"{channel} {what}"), as_attachment=True, download_name=name, mimetype=XLSX)
+        return send_file(_sheet(vb.grid(values, every), f"{channel} {what}"), as_attachment=True, download_name=name, mimetype=XLSX)
 
     @app.route("/volumes/requirements.xlsx")
     @login_required

@@ -776,6 +776,50 @@ class VolumeBook:
         out["show_zone"] = zone
         return out
 
+    # ---------------------------------------------------------------- Phase BM: the same numbers every 30 or every 60 minutes
+    def every_choices(self, key: str) -> List[int]:
+        """The intervals the program's numbers can be looked at: its own, then 30 and 60 minutes where they are coarser and a whole number of it."""
+        step = self.step(key)
+        return [step] + [v for v in (30, 60) if v > step and v % step == 0]
+
+    @staticmethod
+    def _every_ok(step: int, every: Any) -> int:
+        if every == step or (every in (30, 60) and every > step and every % step == 0):
+            return int(every)
+        raise ValueError("The intervals can be shown every 30 or 60 minutes, and not finer than the program's own.")
+
+    def view_every(self, f: Dict[str, Any], every: Any) -> Dict[str, Any]:
+        """The forecast ``f`` with its grids at ``every`` minutes (a copy; ``f`` itself when that is its own interval): contacts added up, people needed
+        the larger of the intervals inside (the hour has to cover its busier half), the service level weighted by the contacts."""
+        step = f["step"]
+        every = self._every_ok(step, every)
+        if every == step or not f.get("calls"):
+            return f
+        out = dict(f)
+        out["calls"] = G.regrid(f["calls"], step, every, "sum")
+        if f.get("needs"):
+            out["needs"] = G.regrid(f["needs"], step, every, "max")
+        if f.get("service"):
+            out["service"] = G.regrid(f["service"], step, every, "mean", weights=f["calls"])
+        out["step"], out["shown_every"] = every, every
+        return out
+
+    def report_every(self, r: Dict[str, Any], every: Any) -> Dict[str, Any]:
+        """The week's report ``r`` at ``every`` minutes: offered and forecast added up, offered over forecast and its band worked out again."""
+        step = r["step"]
+        every = self._every_ok(step, every)
+        if every == step:
+            return r
+        out = dict(r)
+        out["actual"] = G.regrid(r["actual"], step, every, "sum")
+        if r.get("forecast"):
+            s = r["settings"]
+            out["forecast"] = G.regrid(r["forecast"], step, every, "sum")
+            out["otf"] = [[F.otf(a, c) for a, c in zip(out["actual"][d], out["forecast"][d])] for d in range(7)]
+            out["band"] = [[F.band(v, s["band_low"], s["band_high"]) for v in row] for row in out["otf"]]
+        out["step"], out["shown_every"] = every, every
+        return out
+
     def _profile_note(self, p: F.Profile) -> Dict[str, Any]:
         return {"weeks_used": {DAY_NAMES[site_day(w)]: n for w, n in p.weeks_used.items()}, "used": list(p.used),
                 "skipped": [list(x) for x in p.skipped], "closed": [DAY_NAMES[site_day(w)] for w in p.closed], "short": p.short}

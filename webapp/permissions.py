@@ -49,7 +49,7 @@ ENDPOINTS: Dict[str, str] = {
                            "run_resume", "channel_needs_add")},
     **{e: "analysis" for e in ("program", "programs", "incidents_page", "shrinkage_page")},
     **{e: "volumes_view" for e in ("volumes_page", "volumes_table", "volumes_requirements", "volumes_template", "volumes_draft", "volumes_formulas", "volumes_outlook_xlsx")},
-    **{e: "volumes_edit" for e in ("volumes_forecast", "volumes_actuals_check", "volumes_actuals_save", "volumes_actuals_delete",
+    **{e: "volumes_edit" for e in ("volumes_forecast", "volumes_actuals_check", "volumes_actuals_save", "volumes_actuals_delete", "volumes_actuals_spread_hourly",
                                     "volumes_settings", "volumes_drivers", "volumes_sites", "volumes_outlook_index")},
     **{e: "exports" for e in ("exports_page", "exports_download")},
     **{e: "coaching" for e in ("coach_page", "coach_download")},

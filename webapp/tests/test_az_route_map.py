@@ -2,7 +2,7 @@
 """Phase AZ (owner, 2026-10-24: "make sure all our code, engine and website, is fully organized"): the website's routes
 move out of the one 5,000-line ``create_app`` into one module per area. This pins what the site registers, so the move
 changes no address, endpoint, method, hook, filter or extension. ``route_map.json`` was written from the code before the
-move (``python -m webapp.tests.test_az_route_map --write``); change it only when a route is added or removed on purpose (Phase BI, 2026-11-03: the six volumes routes and the "volumes" extension; Phase BJ, 2026-11-04: the volumes draft, drivers and formulas routes; Phase BL, 2026-11-07: the volumes sites, months-ahead index and months-ahead download routes)."""
+move (``python -m webapp.tests.test_az_route_map --write``); change it only when a route is added or removed on purpose (Phase BI, 2026-11-03: the six volumes routes and the "volumes" extension; Phase BJ, 2026-11-04: the volumes draft, drivers and formulas routes; Phase BL, 2026-11-07: the volumes sites, months-ahead index and months-ahead download routes). Phase BM, 2026-11-10: /volumes/actuals/spread-hourly, the owner's hourly history shared over its intervals."""
 import json
 import sys
 import unittest

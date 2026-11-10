@@ -7,7 +7,8 @@ Two shapes are read, from a file (csv or xlsx) or from text pasted out of Excel:
   * grid: the input sheet's layout, intervals down the side and Sun to Sat across (Interval, Sun, Mon, ...), one week and one channel; the
     handle time may be a second grid of the same shape.
 Everything is checked before anything is kept: one bad row means no row is taken, and each reason names its row (never the text typed in it).
-Finer rows than the program's interval are added up to it (the handle time weighted by volume); coarser rows are refused in words.
+Finer rows than the program's interval are added up to it (the handle time weighted by volume); coarser rows that are a whole number of the program's
+intervals (hourly rows in a 30-minute program) are shared evenly over them (Phase BM), others are refused in words.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .bulk_users import _rows
 from .upload_guard import look_rows
+from .volumes_grain import share
 
 CHANNELS = ("Phone", "Chat", "Email")
 DAY_NAMES = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
@@ -160,9 +162,16 @@ def _finish(by_channel: Dict[str, Dict[Tuple[str, int], Tuple[float, Optional[fl
         if file_step and file_step not in STEPS:
             problems.append(f"{channel}: the intervals are {file_step} minutes apart; use 5, 10, 15, 20, 30 or 60.")
             continue
-        if file_step > step:
+        if file_step > step and file_step % step:
             problems.append(f"{channel}: the file's intervals are {file_step}-minute; this program's are {step}-minute. Upload the finer data.")
             continue
+        if file_step > step:  # Phase BM: hourly rows in a 30-minute program are hourly history: each row is shared over the program's intervals
+            parts = file_step // step
+            cells = {(day, minute + i * step): (part, aht) for (day, minute), (offered, aht) in cells.items()
+                     for i, part in enumerate(share(offered, parts))}
+            out.notes.append(f"{channel}: the rows are {'hourly' if file_step == 60 else f'{file_step} minutes apart'}, so each is shared evenly over this program's "
+                             f"{step}-minute intervals.")
+            file_step = step
         if file_step and step % file_step:
             problems.append(f"{channel}: {file_step}-minute rows do not add up to this program's {step}-minute intervals.")
             continue

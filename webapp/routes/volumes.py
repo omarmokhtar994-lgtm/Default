@@ -240,6 +240,7 @@ def register(app, ctx) -> None:
                                 "zone": vb.zone(key), "zone_name": dict(ZONES)[vb.zone(key)].split(" (")[0], "clock": _clock, **extra}
         if tab == "actuals":
             ctxt["weeks"] = _week_choices(key, today - timedelta(weeks=1), 10, 1)
+            ctxt["hourly"] = {ch: len(vb.hourly_days(key, ch)) for ch in CHANNELS}  # Phase BM: days with volume only on the hour
         elif tab == "forecast":
             week = _week(key, request.values.get("week", ""), today + timedelta(weeks=1))
             typed_total = request.values.get("total", "").strip()
@@ -443,7 +444,7 @@ def register(app, ctx) -> None:
             if source not in dict(ZONES):
                 raise ValueError("The time zone the file is in is one of the zones in the list.")
             cells = source != vb.zone(key)                             # rows moved from another zone replace only their own intervals
-            parsed = vb.convert_actuals(key, parsed, source)
+            parsed = vb.convert_actuals(key, vb.as_hourly(key, parsed), source)  # Phase BM: hourly history is shared over its intervals, in its own zone, first
             result.update(problems=parsed.problems, summary=parsed.summary, notes=parsed.notes, cells=cells)
             if not parsed.problems:
                 token = secrets.token_urlsafe(16)
@@ -486,6 +487,20 @@ def register(app, ctx) -> None:
             n = vb.store.delete_volume_days(key, channel, first.isoformat(), last.isoformat())
             ctx._record("volumes_deleted", program=key, subject=channel, detail=f"{first.isoformat()} to {last.isoformat()}: {n} rows")
             flash(f"Deleted {n:,} {channel} rows from {first:%d %b %Y} to {last:%d %b %Y}.")
+        return redirect(url_for("volumes_page", tab="actuals", program=key, channel=channel), code=303)
+
+    @app.route("/volumes/actuals/spread-hourly", methods=["POST"])
+    @login_required
+    def volumes_actuals_spread_hourly():  # type: ignore[no-untyped-def]
+        """Phase BM: the days held that have volume only on the hour are hourly history: share each hour over its intervals."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.form.get("channel", ""))
+        n = vb.spread_hourly(key, channel, g.user["id"])
+        if n:
+            ctx._record("volumes_spread_hourly", program=key, subject=channel, detail=f"{n} day{'s' if n != 1 else ''}")
+            flash(f"{n:,} {channel} day{'s' if n != 1 else ''} read as hourly: each hour is now shared evenly over its intervals, and every day's total is unchanged.")
+        else:
+            flash(f"No {channel} day looks hourly: nothing was changed.")
         return redirect(url_for("volumes_page", tab="actuals", program=key, channel=channel), code=303)
 
     # ------------------------------------------------------------------ settings

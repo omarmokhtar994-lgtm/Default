@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 
-from . import drivers as D, erlang, forecast as F, volumes_zone as Z
+from . import drivers as D, erlang, forecast as F, volumes_grain as G, volumes_zone as Z
 import calendar
 from collections import Counter
 
@@ -371,6 +371,66 @@ class VolumeBook:
             raise ValueError("The table has problems; nothing was saved.")
         save = self.store.upsert_volume_cells if cells else self.store.replace_volume_rows
         return {channel: save(key, channel, rows, user_id) for channel, rows in parsed.rows.items()}
+
+    def as_hourly(self, key: str, parsed: ParsedVolumes) -> ParsedVolumes:
+        """Phase BM: checked rows with the days that are hourly history (volume only on the hour) shared over the program's intervals, and a note
+        saying how many. Rows with problems, and days that are not hourly, come back as they are."""
+        step = self.step(key)
+        if parsed.problems or step >= 60:
+            return parsed
+        out = ParsedVolumes(rows={}, problems=[], summary=dict(parsed.summary), notes=list(parsed.notes))
+        for channel, rows in parsed.rows.items():
+            fixed, days = self._spread(rows, step)
+            out.rows[channel] = fixed
+            if days:
+                out.summary[channel] = {**out.summary.get(channel, {}), "rows": len(fixed)}
+                out.notes.append(f"{channel}: {days} day{'s' if days != 1 else ''} had volume only on the hour, so the site reads "
+                                 f"{'them' if days != 1 else 'it'} as hourly and shares each hour evenly over its {step}-minute intervals.")
+        return out
+
+    def _spread(self, rows: Sequence[Tuple[str, int, float, Optional[float]]], step: int) -> Tuple[List[Tuple[str, int, float, Optional[float]]], int]:
+        """(rows with each hourly day spread, how many days were)."""
+        slots = 1440 // step
+        by_day: Dict[str, List[Tuple[str, int, float, Optional[float]]]] = {}
+        for row in rows:
+            by_day.setdefault(str(row[0]), []).append(row)
+        out: List[Tuple[str, int, float, Optional[float]]] = []
+        changed = 0
+        for day in sorted(by_day):
+            line = [0.0] * slots
+            aht: Dict[int, Optional[float]] = {}
+            for _, minute, offered, seconds in by_day[day]:
+                line[min(slots - 1, int(minute) // step)] += offered
+                aht[int(minute) // 60] = seconds if seconds is not None else aht.get(int(minute) // 60)
+            if not G.looks_hourly(line, step):
+                out += by_day[day]
+                continue
+            changed += 1
+            had = {int(minute) // 60 for _, minute, _, _ in by_day[day]}
+            out += [(day, i * step, float(v), aht.get(i * step // 60)) for i, v in enumerate(G.spread_hour(line, step)) if i * step // 60 in had]
+        return out, changed
+
+    def hourly_days(self, key: str, channel: str) -> List[str]:
+        """The days held for the channel that look like hourly history."""
+        step, slots = self.step(key), self._slots(key)
+        days = self.store.volume_days(key, channel)
+        if step >= 60 or not days:
+            return []
+        lines: Dict[str, List[float]] = {}
+        for r in self.store.volume_rows(key, channel, days[0], days[-1]):
+            lines.setdefault(r["day"], [0.0] * slots)[min(slots - 1, r["minute"] // step)] += r["offered"]
+        return sorted(d for d, line in lines.items() if G.looks_hourly(line, step))
+
+    def spread_hourly(self, key: str, channel: str, user_id: Optional[int]) -> int:
+        """Share each hour of the held days that look hourly over its intervals (their totals unchanged); how many days were changed."""
+        days = self.hourly_days(key, channel)
+        if not days:
+            return 0
+        want = set(days)
+        rows = [(r["day"], r["minute"], r["offered"], r["aht"]) for r in self.store.volume_rows(key, channel, days[0], days[-1]) if r["day"] in want]
+        fixed, changed = self._spread(rows, self.step(key))
+        self.store.replace_volume_rows(key, channel, fixed, user_id)
+        return changed
 
     def convert_actuals(self, key: str, parsed: ParsedVolumes, from_zone: Any) -> ParsedVolumes:
         """Checked rows read in ``from_zone`` as rows in the program's zone. Everything is converted or nothing is: a time the clocks cannot place refuses the lot, in words."""

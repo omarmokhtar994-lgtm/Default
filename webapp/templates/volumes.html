@@ -30,7 +30,10 @@
 <section class="panel" aria-labelledby="held-h"><h2 id="held-h">What is held</h2>
   <table class="edgrid"><thead><tr><th scope="col">Channel</th><th scope="col">Days</th><th scope="col">First</th><th scope="col">Last</th><th scope="col">Weeks</th></tr></thead>
   <tbody>{% for ch in channels %}{% set c = coverage[ch] %}<tr><th scope="row">{{ ch }}</th><td>{{ c.days }}</td><td>{{ c.first or '-' }}</td><td>{{ c.last or '-' }}</td><td>{{ c.weeks|length }}</td></tr>{% endfor %}</tbody></table>
-  <p class="dim">Kept for two years. A day in an upload replaces that day for that channel as a whole. The program's interval is {{ step }} minutes (from its schedule in use); finer rows are added up to it.</p>
+  <p class="dim">Kept for two years. A day in an upload replaces that day for that channel as a whole. The program's interval is {{ step }} minutes (from its schedule in use); finer rows are added up to it, and hourly rows are shared evenly over it.</p>
+  {% for ch in channels %}{% if hourly[ch] %}<form method="post" action="{{ url_for('volumes_actuals_spread_hourly') }}" class="notice" role="status"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ ch }}">
+    <p><strong>{{ hourly[ch] }} {{ ch }} day{{ 's' if hourly[ch] != 1 }} look hourly.</strong> All their volume sits on the hour and every interval in between is empty, so the forecast would plan nobody for the second half of each hour. Sharing each hour evenly over its {{ step }}-minute intervals fixes that; every day's total stays the same.</p>
+    {% if can('volumes_edit') %}<p><button class="button primary" type="submit">Share {{ ch|lower }} hours over their intervals</button></p>{% endif %}</form>{% endif %}{% endfor %}
 </section>
 {% if check %}<section class="panel" aria-labelledby="check-h"><h2 id="check-h">The check</h2>
   <div class="notice{% if not check.problems %} calm{% endif %}" role="{{ 'alert' if check.problems else 'status' }}">

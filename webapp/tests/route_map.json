@@ -1091,6 +1091,14 @@
    []
   ],
   [
+   "/volumes/actuals/spread-hourly",
+   "volumes_actuals_spread_hourly",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
    "/volumes/draft.xlsx",
    "volumes_draft",
    [

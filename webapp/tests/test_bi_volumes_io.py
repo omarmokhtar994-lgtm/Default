@@ -112,10 +112,16 @@ class TheLongForm(unittest.TestCase):
         self.assertEqual(got.problems, [])
         self.assertEqual(got.rows["Phone"], [("2026-10-26", 540, 40.0, 350.0), ("2026-10-26", 570, 10.0, 300.0)])
 
-    def test_coarser_rows_than_the_program_are_refused_in_words(self):
+    def test_coarser_rows_that_do_not_divide_are_refused_and_hourly_rows_are_shared(self):
+        # re-pinned 2026-11-10 (Phase BM, owner: the history "is hourly"): hourly rows in a 30-minute program used to be refused ("Upload the finer
+        # data"); they are now taken and each hour is shared evenly over its intervals. Rows that are not a whole number of intervals are still refused.
         text = "Date\tInterval\tChannel\tOffered\n2026-10-26\t09:00\tPhone\t10\n2026-10-26\t10:00\tPhone\t30\n"
         got = V.parse_long(table(text), None, 30, TODAY)
-        self.assertTrue(any("60-minute" in p for p in got.problems), got.problems)
+        self.assertEqual(got.problems, [])
+        self.assertEqual([(m, v) for _, m, v, _ in got.rows["Phone"]], [(540, 5.0), (570, 5.0), (600, 15.0), (630, 15.0)])
+        twenty = "Date\tInterval\tChannel\tOffered\n2026-10-26\t09:00\tPhone\t10\n2026-10-26\t09:20\tPhone\t30\n"
+        refused = V.parse_long(table(twenty), None, 15, TODAY)
+        self.assertTrue(any("20-minute" in p for p in refused.problems), refused.problems)
 
     def test_a_table_without_the_needed_columns_is_refused(self):
         with self.assertRaises(ValueError):

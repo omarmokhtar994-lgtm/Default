@@ -37,4 +37,16 @@ second look. **Rule:** on each set of four, the error is no higher than the tren
 on the fourth. Both sets must meet it; otherwise the suggestion stays the trend and the back-test is information only.
 
 ## Result of candidate 2
-(filled in after the runs)
+Run 2026-11-10 (`methods_rule.py 0.8 21` and `methods_rule.py 0.8 11`):
+
+| seeds | flat | rise | season | shift | no higher than the trend | largest excess |
+|---|---|---|---|---|---|---|
+| 21 to 24 | 4.12 / 4.12 | 2.68 / 3.98 | 6.39 / 7.86 | 6.43 / 6.66 | 4 of 4 | 0.00 |
+| 11 to 14 | 1.93 / 1.74 | 4.27 / 4.25 | 2.17 / 6.53 | 9.25 / 8.65 | 1 of 4 | 0.61 |
+
+(picked / trend, % error.) Met on the fresh seeds, not on the first set: **rejected**, both had to meet it.
+
+## What ships
+The suggestion is the trend, as before Phase BM: no automatic change. The back-test is shown as information: every method's number for the week
+beside its measured error on the program's own last weeks, each with "Use this number" (which fills the box, like "Use the suggestion"). The planner
+picks; the total is theirs. Where one method is clearly better (the season above: 2.2 % against 6.5 %) the table shows it.

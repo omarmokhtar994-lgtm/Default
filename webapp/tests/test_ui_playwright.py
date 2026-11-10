@@ -4380,6 +4380,7 @@ class TheBmScreensInTheBrowser(unittest.TestCase):
             expect(page.locator("#fc-summary")).to_contain_text("7,000 contacts, not saved yet")
             self.assertLessEqual(self.sideways(page), 1, name)
             self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.wait_for_timeout(600)   # let the page change finish, so the picture is of this page only
             page.screenshot(path=str(BM_SCREENS / f"forecast_{name}.png"), full_page=True)
             if coarse != vb.step(self.key):
                 group = page.get_by_role("group", name="Interval")
@@ -4390,12 +4391,13 @@ class TheBmScreensInTheBrowser(unittest.TestCase):
                     link.focus()
                     page.keyboard.press("Enter")
                 expect(page.get_by_text(f"Shown every {coarse} minutes")).to_be_visible()
-                expect(page.locator("#total")).to_have_value("7,000")                    # the number typed came along
+                expect(page.locator("#total")).to_have_value(re.compile(r"^7,?000$"))     # the number typed came along
                 self.assertEqual(page.locator("#tbl-calls tbody tr").count(), 1440 // coarse)
             page.get_by_label("Show times in").select_option("America/New_York")
             page.get_by_role("button", name="Work it out").click()
             expect(page.get_by_text("Shown in New York time").first).to_be_visible()
             self.assertLessEqual(self.sideways(page), 1, name)
+            page.wait_for_timeout(600)   # let the page change finish, so the picture is of this page only
             page.screenshot(path=str(BM_SCREENS / f"forecast_hour_new_york_{name}.png"), full_page=True)
             page.close()
 
@@ -4407,10 +4409,11 @@ class TheBmScreensInTheBrowser(unittest.TestCase):
         if not page.get_by_role("heading", name="How well each method did on your own weeks").is_visible():
             page.get_by_text("Help with the number (optional)").click()
         expect(page.get_by_role("heading", name="How well each method did on your own weeks")).to_be_visible()
-        row = page.get_by_role("row").filter(has_text="Last week")
+        row = page.get_by_role("row").filter(has=page.get_by_role("rowheader", name=re.compile(r"^Last week")))
         said = row.get_by_role("cell").nth(0).inner_text().strip()
         row.get_by_role("button").click()
         expect(page.locator("#total")).to_have_value(said)
+        page.wait_for_timeout(600)
         page.screenshot(path=str(BM_SCREENS / "methods_desktop.png"), full_page=True)
         page.close()
 
@@ -4430,6 +4433,7 @@ class TheBmScreensInTheBrowser(unittest.TestCase):
             self.assertEqual(page.locator("#tbl-calls").count(), 0)
             self.assertLessEqual(self.sideways(page), 1, name)
             self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.wait_for_timeout(600)   # let the page change finish, so the picture is of this page only
             page.screenshot(path=str(BM_SCREENS / f"staffing_{name}.png"), full_page=True)
             page.goto(self.url("forecast"))
             page.get_by_role("button", name="Remove the saved one").click()

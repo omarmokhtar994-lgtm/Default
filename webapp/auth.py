@@ -80,8 +80,8 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
         if g.user is None:
             asked = request.full_path if request.query_string else request.path  # with its program and date
             return redirect(url_for("login", next=asked))
-        if g.user["must_change"] and request.endpoint not in {"change_password", "logout"}:
-            return redirect(url_for("change_password"))
+        if (g.user["must_change"] or current_app.extensions["store"].password_expired(g.user)) and request.endpoint not in {"change_password", "logout"}:
+            return redirect(url_for("change_password"))  # a temporary password, or one older than PASSWORD_MAX_DAYS (owner, 2026-11-11)
         return view(*args, **kwargs)
     return wrapped
 

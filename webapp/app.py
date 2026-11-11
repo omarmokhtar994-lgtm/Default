@@ -48,7 +48,7 @@ from .schedules import ScheduleBook, group_changes
 from .versions import zoned_label
 from .paging import page_of
 from .runs import MODES, OPTION_LABELS, RunQueue, run_options
-from .store import MIN_PASSWORD_LENGTH, Store, clean_password
+from .store import MIN_PASSWORD_LENGTH, PASSWORD_WARN_DAYS, Store, clean_password
 from .throttle import SignInThrottle
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook
@@ -594,7 +594,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
             news_weeks = len(found["leave"]) + len(found["swaps"])
         else:
             news_weeks = 0
-        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n,
+        left = None
+        if who and not who["must_change"] and endpoint not in ("change_password", "logout", "static"):
+            days = app.extensions["store"].password_days_left(who)  # owner, 2026-11-11: the last PASSWORD_WARN_DAYS say how many days are left
+            left = days if days is not None and 0 < days <= PASSWORD_WARN_DAYS else None
+        return {"csrf_token": csrf_token, "copyright": COPYRIGHT, "user": g.get("user"), "news_n": news_n, "password_days_left": left,
                 "news_weeks": news_weeks, "zone_words": ctx._zone_words,
                 "theme": theme if theme in THEMES else "", "back": back,
                 "status_words": STATUS_WORDS, "label": label, "modes": MODES, "stages": stages, "in_flight": IN_FLIGHT,

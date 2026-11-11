@@ -22,6 +22,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 LOCK_AFTER_FAILURES = 5
 TEMP_PASSWORD_DAYS = 7
+PASSWORD_MAX_DAYS = 30   # owner, 2026-11-11: a password older than this must be changed before anything else
+PASSWORD_WARN_DAYS = 7   # ... and from this many days before, every page says how many days are left
 LOCK_SECONDS = 15 * 60
 
 SCHEMA = """
@@ -534,6 +536,10 @@ class Store:
             # Phase AU: when the person last looked at the changes made to their breaks
             if "day_seen_at" not in people:
                 db.execute("alter table users add column day_seen_at real not null default 0")
+            # Owner, 2026-11-11: when the password was last set. Accounts that exist when this arrives start their PASSWORD_MAX_DAYS then.
+            if "pw_changed" not in people:
+                db.execute("alter table users add column pw_changed real not null default 0")
+                db.execute("update users set pw_changed = ?", (time.time(),))
             # Phase AU: a temporary password is good for TEMP_PASSWORD_DAYS (0 = no end: one the person chose themselves)
             if "temp_until" not in people:
                 db.execute("alter table users add column temp_until real not null default 0")
@@ -652,10 +658,10 @@ class Store:
             raise ValueError("username and password are required")
         with self._db() as db:
             cur = db.execute(
-                "insert into users (username, display_name, password_hash, is_admin, must_change, created, temp_until)"
-                " values (?, ?, ?, ?, ?, ?, ?)",
+                "insert into users (username, display_name, password_hash, is_admin, must_change, created, temp_until, pw_changed)"
+                " values (?, ?, ?, ?, ?, ?, ?, ?)",
                 (username, display_name.strip() or username, hash_password(password), int(is_admin),
-                 int(must_change), time.time(), time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0))
+                 int(must_change), time.time(), time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0, time.time()))
             return int(cur.lastrowid)
 
     PERSON_FIELDS = ("display_name", "is_admin", "is_supervisor", "all_programs", "is_associate", "roster_name",
@@ -966,6 +972,19 @@ class Store:
             db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))
             return dict(row), "ok"
 
+    @staticmethod
+    def password_days_left(user: Dict[str, Any], now: Optional[float] = None) -> Optional[int]:
+        """Whole days (rounded up) until the password must be changed: 0 when it is already due; None when the age is not known."""
+        since = user.get("pw_changed") or 0
+        if not since:
+            return None
+        left = since + PASSWORD_MAX_DAYS * 86400 - (now if now is not None else time.time())
+        return 0 if left <= 0 else int(-(-left // 86400))
+
+    @classmethod
+    def password_expired(cls, user: Dict[str, Any], now: Optional[float] = None) -> bool:
+        return cls.password_days_left(user, now) == 0
+
     def unlock_user(self, user_id: int) -> bool:
         """Lift the lock after too many wrong passwords, and start the count of wrong tries again. False when the account was not locked.
         The password is not touched."""
@@ -981,9 +1000,9 @@ class Store:
 
     def set_password(self, user_id: int, password: str, must_change: bool = False) -> None:
         with self._db() as db:
-            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0, temp_until = ?"
+            db.execute("update users set password_hash = ?, must_change = ?, failed = 0, locked_until = 0, temp_until = ?, pw_changed = ?"
                        " where id = ?", (hash_password(password), int(must_change),
-                                         time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0, user_id))
+                                         time.time() + TEMP_PASSWORD_DAYS * 86400 if must_change else 0, time.time(), user_id))
 
     def set_active(self, user_id: int, active: bool) -> None:
         with self._db() as db:

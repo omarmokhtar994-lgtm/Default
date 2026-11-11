@@ -535,7 +535,7 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 Verdicts, the deployed patch's identity, the read-only-code design and what is still open: `docs/security/SECURITY_STATUS_2026-11-11.md`; outbound access:
 `docs/security/EGRESS_DESIGN.md`. In this release: the deployed 10-file website patch (ported byte for byte, plus its gaps closed), code owned by root and
 read-only to the website (`deploy/seal_package.sh`, `rollback.sh`, the service file, `install.sh`/`update.sh`/`apply_patch.sh`), an Unlock button for locked
-accounts (admins any; supervisors their own programs; IP release stays admin), a one-hour idle sign-out, `run_tests.sh` without a fixed `/tmp` name.
+accounts (admins any; supervisors their own programs; IP release stays admin), a one-hour idle sign-out, passwords last 30 days (forced change after, a reminder in the last 7; `PASSWORD_MAX_DAYS` in `webapp/store.py`), `run_tests.sh` without a fixed `/tmp` name.
 **After the first update that installs this release, run `sudo bash /opt/scheduler/package/deploy/seal_package.sh /opt/scheduler/package` once**
 (the old installed `update.sh` hands the code back to the website account); then `--check`. Local proof: `python tools/readonly_check.py --gate` as root.
 Not done and listed there: MFA, forced change of old weak passwords, egress, SSH source range, patches, backups, independent test.

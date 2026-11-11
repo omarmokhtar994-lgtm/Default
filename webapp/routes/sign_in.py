@@ -88,5 +88,6 @@ def register(app, ctx) -> None:
                 session["pw"] = session_stamp(store.get_user(g.user["id"]))  # this device stays; others sign in again
                 flash("Password changed.")
                 return redirect(url_for("home"))
-        return render_template("password.html", error=error, forced=bool(g.user["must_change"]))
+        old_one = not g.user["must_change"] and app.extensions["store"].password_expired(g.user)
+        return render_template("password.html", error=error, forced=bool(g.user["must_change"]) or old_one, too_old=old_one)
 

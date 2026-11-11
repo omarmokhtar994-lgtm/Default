@@ -126,6 +126,11 @@ The first should say `SEALED`; the second should list only `/var/lib/scheduler` 
 **Signed out after one hour.** A person with no page load for an hour is signed out. Their next click goes to the sign-in page. The live wallboard
 reloads itself every minute and so stays up.
 
+**Passwords last 30 days.** A password older than 30 days must be changed before anything else: the person signs in as usual and is taken to the
+change-password page, and nothing else opens until they choose a new one (it cannot be the same as the old one). In the last 7 days every page shows
+"Your password expires in N days" with a link to change it. A new password, a reset by an admin and a new account start the 30 days again. Accounts that
+exist when this release arrives start their 30 days that day, so nobody is locked out by the update.
+
 **Locked accounts.** After five wrong passwords an account is locked for 15 minutes. An admin, or a supervisor for people in their own programs,
 presses **Unlock** next to the person on the People page. Releasing a held IP address stays with admins.
 

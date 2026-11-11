@@ -80,6 +80,7 @@
 <main id="main" tabindex="-1">
 {% if user and back %}<p class="crumbs"><a href="{{ back }}" data-back>‹ Back</a><a class="home" href="{{ url_for('home') }}">Home</a></p>{% endif %}
 {% with messages = get_flashed_messages() %}{% for m in messages %}<p class="flash" role="status">{{ m }}</p>{% endfor %}{% endwith %}
+{% if password_days_left %}<p class="flash" role="status">Your password expires in {{ password_days_left }} day{{ 's' if password_days_left != 1 }}. <a href="{{ url_for('change_password') }}">Change it now</a>.</p>{% endif %}
 {% block content %}{% endblock %}
 {% block live %}{% endblock %}
 </main>

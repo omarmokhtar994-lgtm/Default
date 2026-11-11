@@ -131,13 +131,17 @@ run_check "wrapper selfcheck" "$PY" engine/RUN_UNIVERSAL_PRODUCTION.py --selfche
 # 1800s run died on the first call. This catches it statically in under a
 # second, and is verified to do so by removing the parameter again.
 echo "── cross-module call signatures"
-if "$PY" tools/check_cross_module_calls.py engine >/tmp/xmod.out 2>&1; then
+# Its output goes to a private temporary file, not a fixed name in /tmp: another account (or an earlier run by a different one) could own or
+# pre-create /tmp/xmod.out, which made this check fail with "Permission denied" for the website's account and is a symlink trap on a shared /tmp.
+xmod_out="$(mktemp)"
+if "$PY" tools/check_cross_module_calls.py engine >"$xmod_out" 2>&1; then
   echo "   cross-module call signatures OK"
 else
   echo "   cross-module call signatures FAILED"
-  cat /tmp/xmod.out
+  cat "$xmod_out"
   fail=1
 fi
+rm -f "$xmod_out"
 
 # Static undefined-name sweep. This is how the parse_time_to_minute NameError was
 # found: neither the suites nor line-by-line reading caught a name that is called

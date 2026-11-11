@@ -193,7 +193,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `_parse_break_window_controls` | 3279 to 3385 | 107 | `parse_input` |  | Parse instruction-driven break placement windows and flexible spacing. |
 | `_coerce_language_window_entries` | 3465 to 3479 | 15 | `_authored_language_windows`, `_input_contract_payload_core` | 1 file | Normalize legacy single-window and current multi-window values. |
 | `_authored_language_windows` | 3482 to 3492 | 11 | `associate_language_windows`, `language_working_window_violations` |  | Return all authored windows before mode-specific filtering. |
-| `parse_input` | 3669 to 4477 | 809 | `run_case`, `selfcheck` | 12 files |  |
+| `parse_input` | 3669 to 4477 | 809 | `run_case`, `selfcheck` | 13 files |  |
 | `input_contract_payload` | 4480 to 4494 | 15 | `canonical_contract_snapshot` |  |  |
 | `_input_contract_payload_core` | 4497 to 4702 | 206 | `input_contract_payload` |  |  |
 | `canonical_contract_snapshot` | 4705 to 4707 | 3 | `benchmark_provenance`, `run_case` | 1 file | Single normalized contract object used by hashes, resume identity and QA. |
@@ -374,7 +374,7 @@ Blocks inside `run_case` of 70 lines or more, in order:
 | `repair_profile` | 7248 to 7257 | 10 | `run_case`, `run_coordinated_shift_off_break_loop`, `run_logic_based_break_cut_feedback`, `run_post_break_repair_phase` +2 |  |  |
 | `_empty_skeleton` | 7260 to 7261 | 2 | `build_skeleton` |  |  |
 | `load_seed_skeleton` | 7264 to 7316 | 53 | `load_validated_fallback_candidate`, `run_case` | 1 file | Read schedule cells from any compatible workbook as a generic anchor seed. |
-| `build_skeleton` | 7778 to 8708 | 931 | `run_break_load_feedback`, `run_case`, `run_conflict_refinement`, `run_constraint_isolation` +7 | 5 files |  |
+| `build_skeleton` | 7778 to 8708 | 931 | `run_break_load_feedback`, `run_case`, `run_conflict_refinement`, `run_constraint_isolation` +7 | 6 files |  |
 | `pattern_map` | 10532 to 10533 | 2 | `break_qslots`, `candidate_lineage_id`, `dnbs_day_neighbourhood_model`, `selected_break_spacing_rows` +3 |  |  |
 | `skeleton_release_diagnostic_only` | 14134 to 14148 | 15 | `coverage_first_stage2_anchor_candidates`, `protected_floor_anchor_key`, `run_case`, `select_best_before_skeleton` +4 |  | Return True for feasibility probes/warm-start anchors that must not win release. |
 | `skeleton_exceeds_exception_cap` | 14209 to 14224 | 16 | `select_best_shippable_before_skeleton` |  | True when this skeleton PROVABLY cannot ship under the workbook's policy. |
@@ -560,9 +560,9 @@ Names that other code (the wrapper, the validator, the tools, the website; not t
 
 | Name | Files | Examples |
 |---|---|---|
-| `parse_input` | 12 | `engine/RUN_UNIVERSAL_PRODUCTION.py`, `tools/b13_joint_direct_ab.py`, `tools/b4_probe.py` |
-| `HardConfig` | 5 | `tools/b5_tiers.py`, `tools/b6_detect.py`, `tools/break_slice_depth_probe.py` |
-| `build_skeleton` | 5 | `tools/b5_tiers.py`, `tools/b6_detect.py`, `tools/break_slice_depth_probe.py` |
+| `parse_input` | 13 | `engine/RUN_UNIVERSAL_PRODUCTION.py`, `tools/b13_joint_direct_ab.py`, `tools/b4_probe.py` |
+| `HardConfig` | 6 | `tools/b5_tiers.py`, `tools/b6_detect.py`, `tools/break_slice_depth_probe.py` |
+| `build_skeleton` | 6 | `tools/b5_tiers.py`, `tools/b6_detect.py`, `tools/break_slice_depth_probe.py` |
 | `skeleton_profiles` | 5 | `tools/b5_tiers.py`, `tools/b6_detect.py`, `tools/break_slice_depth_probe.py` |
 | `calculate_metrics` | 3 | `tools/b4_probe.py`, `tools/break_slice_depth_probe.py`, `tools/stage1_slice_depth_probe.py` |
 | `scheduled_cells` | 3 | `tools/b4_probe.py`, `tools/break_slice_depth_probe.py`, `tools/stage1_slice_depth_probe.py` |

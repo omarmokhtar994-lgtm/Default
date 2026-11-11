@@ -55,9 +55,13 @@ class TheSignInCost(_Site):
             self.store.authenticate(username, password)
         return check.call_count, make.call_count
 
-    def test_an_unknown_name_costs_one_password_check_like_a_known_name_with_a_wrong_password(self):
-        self.assertEqual(self.count("nobody_here", "Wrong-pass-12345"), (1, 0))
-        self.assertEqual(self.count("sam", "Wrong-pass-12345"), (1, 0))
+    def test_an_unknown_name_costs_the_same_password_checks_as_a_known_name_with_a_wrong_password(self):
+        # Re-pinned 2026-11-11 (source audit lead h1-login-timing-padded-password-enumeration): the invariant is that every answer costs the same, and
+        # it was one hash only for an unpadded password: a padded wrong password cost a real account two (typed, then cleaned) and an unknown name one,
+        # so the time told which usernames exist. Every answer now costs two hashes whether or not the password is padded (the measured count moved
+        # from 1 to 2 on purpose; the equality this test is about did not). test_sec_audit_fixes pins the padded, locked and right-password cases too.
+        self.assertEqual(self.count("nobody_here", "Wrong-pass-12345"), (2, 0))
+        self.assertEqual(self.count("sam", "Wrong-pass-12345"), (2, 0))
 
 
 class TheLongName(_Site):

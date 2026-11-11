@@ -951,25 +951,37 @@ class Store:
         now = time.time()
         with self._db() as db:
             row = db.execute("select * from users where username = ?", (username,)).fetchone()
+            typed = password or ""  # as typed first (a password set before Phase AU may carry a space), then cleaned
+            cleaned = clean_password(typed)
+            # Audit 2026-11-11: every answer costs the same two hashes (the typed form and the cleaned form, against the dummy hash for an unknown or
+            # locked name), so the time does not say which usernames exist or which are locked, with or without padding on the password.
             if row is None:
-                check_password_hash(_DUMMY_HASH, password or "")  # one check, as for a real name with a wrong password
+                check_password_hash(_DUMMY_HASH, typed)
+                check_password_hash(_DUMMY_HASH, cleaned)
                 return None, "bad"
             if row["locked_until"] > now:
-                check_password_hash(_DUMMY_HASH, password or "")  # a locked account takes as long to refuse as an unknown one
+                check_password_hash(_DUMMY_HASH, typed)
+                check_password_hash(_DUMMY_HASH, cleaned)
                 return None, "locked"
-            typed = password or ""  # as typed first (a password set before Phase AU may carry a space), then cleaned
-            if not (check_password_hash(row["password_hash"], typed) or (
-                    clean_password(typed) != typed and check_password_hash(row["password_hash"], clean_password(typed)))):
-                failed = row["failed"] + 1
-                locked = now + LOCK_SECONDS if failed >= LOCK_AFTER_FAILURES else 0
-                db.execute("update users set failed = ?, locked_until = ? where id = ?",
-                           (0 if locked else failed, locked, row["id"]))
-                return None, "locked" if locked else "bad"
+            right_typed = check_password_hash(row["password_hash"], typed)
+            right_cleaned = check_password_hash(row["password_hash"], cleaned)
+            if not (right_typed or right_cleaned):
+                # One atomic update, so guesses made at the same moment each count (the count was read before the slow hash and written after it).
+                # An account another guess has just locked keeps that lock.
+                db.execute("update users set"
+                           " failed = case when locked_until > ? then failed when failed + 1 >= ? then 0 else failed + 1 end,"
+                           " locked_until = case when locked_until > ? then locked_until when failed + 1 >= ? then ? else locked_until end"
+                           " where id = ?", (now, LOCK_AFTER_FAILURES, now, LOCK_AFTER_FAILURES, now + LOCK_SECONDS, row["id"]))
+                after = db.execute("select locked_until from users where id = ?", (row["id"],)).fetchone()
+                return None, "locked" if after["locked_until"] > now else "bad"
             if not row["active"]:
                 return None, "disabled"  # said only to someone who knows the password (BF: it named closed accounts to anyone)
             if row["must_change"] and row["temp_until"] and row["temp_until"] < now:
                 return None, "expired"  # the right temporary password, too late: not a wrong try
-            db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))
+            # A guess that was already past the lock check when the account got locked does not sign in, even with the right password.
+            cleared = db.execute("update users set failed = 0, locked_until = 0 where id = ? and locked_until <= ?", (row["id"], now))
+            if cleared.rowcount == 0:
+                return None, "locked"
             return dict(row), "ok"
 
     @staticmethod

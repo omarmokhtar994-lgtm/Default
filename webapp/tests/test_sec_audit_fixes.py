@@ -4,10 +4,18 @@
 Each class pins one lead with made-up people and programs. The audit could not run code, so every lead is first reproduced here (red), then fixed.
 Where a lead was a policy question (a supervisor managing someone who also holds other programs; an uploader keeping a run after losing its program) the
 owner's "Fix all" settles it: the stricter rule is the contract."""
+import shutil
+import tempfile
+import threading
+import time
 import unittest
 from datetime import date
+from pathlib import Path
+from unittest import mock
 
+from webapp import store as store_module
 from webapp.access import Access
+from webapp.store import LOCK_AFTER_FAILURES, Store
 from webapp.tests import test_ar_walls as fx
 from webapp.tests.test_channel_people import add_version
 from webapp.tests.test_programs import TheAccess
@@ -157,6 +165,100 @@ class TheDayPageChecksEveryProgramAndEveryDate(fx._Walls):
                 client = sign_in(self.app, who, "Owner-pass-123" if who == "omar" else fx.PASSWORD)
                 got = self.post(client, "/day/replan/apply", program=self.alpha, date="2026-10-14", move="Alpha Person One|0|600|2026-10-01")
                 self.assertEqual(self.closed_message(got, client), closed)
+
+
+class SignInHoldsUnderParallelGuesses(unittest.TestCase):
+    """Leads h1-lockout-counter-lost-update and h1-login-timing-padded-password-enumeration. The count of wrong passwords was read before the (slow) hash
+    and written after it as an absolute number, so guesses made at the same moment shared one stale count and the 5-try lock came late or was overwritten;
+    a guess already past the lock check could still sign in. A padded wrong password cost two hashes for a real account and one for an unknown or locked
+    one, so the time told which usernames exist. The count is now one atomic update, a right password re-checks the lock when it is done, and every
+    answer costs the same two hashes. The hash is held at a barrier here so the overlap is certain, not a matter of timing."""
+    GOOD = "Right-pass-12345"
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.store = Store(self.dir / "scheduler.db")
+        self.uid = self.store.add_user("dana", "Dana", self.GOOD, must_change=False)
+
+    def row(self):
+        return self.store.get_user(self.uid)
+
+    def test_guesses_made_at_the_same_moment_all_count(self):
+        tries = LOCK_AFTER_FAILURES + 1
+        gate = threading.Barrier(tries, timeout=20)
+        real = store_module.check_password_hash
+
+        def held(hashed, password):
+            gate.wait()  # every guess has read the row before any of them writes
+            return real(hashed, password)
+
+        answers = []
+        with mock.patch.object(store_module, "check_password_hash", held):
+            threads = [threading.Thread(target=lambda: answers.append(self.store.authenticate("dana", "Wrong-pass-9999")[1]))
+                       for _ in range(tries)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(30)
+        self.assertEqual(len(answers), tries)
+        self.assertGreater(self.row()["locked_until"], time.time(), "six wrong guesses at once must lock the account")
+        self.assertEqual(self.store.authenticate("dana", self.GOOD)[1], "locked")
+
+    def test_a_right_password_that_was_already_past_the_lock_check_does_not_sign_in(self):
+        started, release = threading.Event(), threading.Event()
+        real = store_module.check_password_hash
+
+        def held(hashed, password):
+            if password == self.GOOD:
+                started.set()
+                release.wait(20)  # the right guess waits inside the hash while the account gets locked
+            return real(hashed, password)
+
+        out = []
+        with mock.patch.object(store_module, "check_password_hash", held):
+            worker = threading.Thread(target=lambda: out.append(self.store.authenticate("dana", self.GOOD)))
+            worker.start()
+            self.assertTrue(started.wait(20))
+            with self.store._db() as db:
+                db.execute("update users set locked_until = ? where id = ?", (time.time() + 600, self.uid))
+            release.set()
+            worker.join(30)
+        self.assertEqual(out[0][1], "locked")
+        self.assertIsNone(out[0][0])
+
+    def test_the_lock_still_comes_on_the_fifth_wrong_guess_one_after_another(self):
+        for n in range(1, LOCK_AFTER_FAILURES):
+            self.assertEqual(self.store.authenticate("dana", "Wrong-pass-9999")[1], "bad", n)
+        self.assertEqual(self.store.authenticate("dana", "Wrong-pass-9999")[1], "locked")
+        self.assertEqual(self.store.authenticate("dana", self.GOOD)[1], "locked")
+
+    def test_a_right_password_clears_the_count(self):
+        self.store.authenticate("dana", "Wrong-pass-9999")
+        self.assertEqual(self.store.authenticate("dana", self.GOOD)[1], "ok")
+        self.assertEqual(self.row()["failed"], 0)
+
+    def test_every_answer_costs_the_same_number_of_hashes(self):
+        locked = self.store.add_user("lena", "Lena", self.GOOD, must_change=False)
+        with self.store._db() as db:
+            db.execute("update users set locked_until = ? where id = ?", (time.time() + 600, locked))
+        real, counts = store_module.check_password_hash, []
+
+        def counted(hashed, password):
+            counts[-1] += 1
+            return real(hashed, password)
+
+        cases = {"unknown": ("nobody", "Wrong-pass-9999"), "unknown padded": ("nobody", " Wrong-pass-9999 "),
+                 "locked": ("lena", "Wrong-pass-9999"), "locked padded": ("lena", " Wrong-pass-9999 "),
+                 "real wrong": ("dana", "Wrong-pass-9999"), "real wrong padded": ("dana", "\u00a0Wrong-pass-9999\n"),
+                 "real right": ("dana", self.GOOD), "real right padded": ("dana", f" {self.GOOD} ")}
+        got = {}
+        with mock.patch.object(store_module, "check_password_hash", counted):
+            for name, (who, password) in cases.items():
+                counts.append(0)
+                self.store.authenticate(who, password)
+                got[name] = counts[-1]
+        self.assertEqual(set(got.values()), {2}, got)
 
 
 if __name__ == "__main__":

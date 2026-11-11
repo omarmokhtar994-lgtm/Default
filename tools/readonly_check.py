@@ -86,7 +86,8 @@ def main() -> int:
     print(sealed.stdout.strip() or sealed.stderr.strip())
     results = []
     env = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": str(tmp / "pyc"), "TMPDIR": str(tmp), "SCHEDULER_DATA_DIR": str(data),
-           "XDG_CACHE_HOME": str(data / "cache"), "RUFF_CACHE_DIR": str(data / "cache" / "ruff"), "PYTHONPATH": str(code)}
+           "XDG_CACHE_HOME": str(data / "cache"), "RUFF_CACHE_DIR": str(data / "cache" / "ruff"), "PYTHONPATH": str(code),
+           "PYTHON": sys.executable}                           # the service file sets PYTHON the same way: the runner's safety gate uses it
     py = sys.executable
 
     def step(name, cmd, timeout, extra=None, ok_codes=(0,)):

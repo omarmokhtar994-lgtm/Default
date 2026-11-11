@@ -1,0 +1,11 @@
+SEALED: /tmp/sec_tmp/readonly-check-mspf5wog/package is owned by root; the website's account can read and run it, not change it.
+PASS  the website's own tests that sign in and read pages (read-only code)
+PASS  explicit compile without a cache prefix is refused (as the earlier server run found)
+PASS  an explicit compile of the engine's file with the cache prefix works and writes nothing into the code
+PASS  one real engine run (smallest example workbook, QUICK, a full schedule, 2 minutes of solving) into a writable results folder
+    RELEASE VERDICT (run): RELEASABLE
+PASS  the run wrote 9 workbook(s) into the results folder
+results written: 44 files
+
+ALL STEPS PASSED: nothing tried to write the code folder.
+EXIT 0

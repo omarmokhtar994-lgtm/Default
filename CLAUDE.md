@@ -105,6 +105,9 @@ python-performance-optimization.
     Lighthouse or DevTools MCP); SEO is out of scope for an internal tool behind a sign-in.
     For accessibility, use addyosmani's skill for a site audit and better-accessibility for
     a single change.
+- security-audit (cloudflare/security-audit-skill @c1c8a8c, MIT; owner, 2026-11-11; local notes at the top): full multi-phase
+  source audit of the website and deploy scripts, only when the owner asks for an audit. Own code only, never the live
+  server; reports go to the scratchpad or `evidence/phase_sec/`. It suggests; the rules above decide.
 - security-and-hardening, observability-and-instrumentation, documentation-and-adrs
   (addyosmani/agent-skills @1be8e34, MIT; each has local notes at the top):
   - security-and-hardening: any website change that touches sign-in, sessions, uploads,

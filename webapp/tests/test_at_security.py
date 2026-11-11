@@ -400,7 +400,9 @@ class TheAnswers(_Secured):
             self.assertEqual(got.headers["Cache-Control"], "no-store", url)
             self.assertIn("camera=()", got.headers["Permissions-Policy"])
         self.assertEqual(self.app.test_client().get("/login").headers["Cache-Control"], "no-store")
-        self.assertNotIn("no-store", client.get("/static/app.css").headers.get("Cache-Control", ""))
+        css = client.get("/static/app.css", buffered=True)                   # buffered: the file the static route opened is read and closed here
+        self.assertNotIn("no-store", css.headers.get("Cache-Control", ""))
+        css.close()
 
     def test_an_error_page_shows_no_trace_and_no_path(self):
         client = sign_in(self.app, "plan_a", PASSWORD)

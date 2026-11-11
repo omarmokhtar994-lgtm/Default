@@ -265,6 +265,12 @@ def register(app, ctx) -> None:
             ctx._record("user_deleted", subject=target["username"], detail=role(target))
             flash(f"{target['username']} is deleted: they cannot sign in and the username is free again. "
                   "Their name stays in the history of what they did.")
+        elif action == "unlock":  # Phase SEC (owner, 2026-11-11): lift the lock after too many wrong passwords; the password is untouched
+            if store.unlock_user(user_id):
+                ctx._record("user_unlocked", subject=target["username"])  # who did it is on the record; never a password
+                flash(f"{target['username']} is unlocked: they can sign in now with the password they have.")
+            else:
+                flash(f"{target['username']} is not locked.")
         elif action == "reset":
             temporary = secrets.token_urlsafe(9)
             store.set_password(user_id, temporary, must_change=True)

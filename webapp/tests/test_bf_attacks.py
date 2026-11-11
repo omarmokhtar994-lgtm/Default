@@ -234,7 +234,10 @@ class TheUploads(_Secured):
         client = sign_in(self.app, "plan_a", PASSWORD)
         form = {"csrf_token": token(client), "kind": "ready", "program": self.alpha, "week_start": "2026-10-18",
                 "workbook": (io.BytesIO(data), name), **extra}
-        return client.post("/runs", data=form, content_type="multipart/form-data")
+        try:
+            return client.post("/runs", data=form, content_type="multipart/form-data")
+        finally:
+            form["workbook"][0].close()                                     # the upload's own buffer; the test client leaves it open
 
     def test_hostile_workbooks_are_refused_without_a_crash(self):
         bomb = io.BytesIO()

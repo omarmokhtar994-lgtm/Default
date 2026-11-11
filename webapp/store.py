@@ -966,6 +966,16 @@ class Store:
             db.execute("update users set failed = 0, locked_until = 0 where id = ?", (row["id"],))
             return dict(row), "ok"
 
+    def unlock_user(self, user_id: int) -> bool:
+        """Lift the lock after too many wrong passwords, and start the count of wrong tries again. False when the account was not locked.
+        The password is not touched."""
+        with self._db() as db:
+            row = db.execute("select locked_until from users where id = ?", (user_id,)).fetchone()
+            if row is None or row["locked_until"] <= time.time():
+                return False
+            db.execute("update users set failed = 0, locked_until = 0 where id = ?", (user_id,))
+            return True
+
     def check_password(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         return self.authenticate(username, password)[0]
 
@@ -1580,7 +1590,7 @@ class Store:
         with _GENERATION_LOCK:
             _GENERATIONS[self._gen_key] = _GENERATIONS.get(self._gen_key, 0) + 1
 
-    SESSION_KEEP_SECONDS = 30 * 86400  # an ended session is remembered this long (cookies last 12 hours)
+    SESSION_KEEP_SECONDS = 30 * 86400  # an ended session is remembered this long (a session lasts one idle hour)
 
     def revoke_session(self, user_id: int, at: float, now: Optional[float] = None) -> None:
         """Phase AV: the session that began at ``at`` was signed out; its cookie works no more."""

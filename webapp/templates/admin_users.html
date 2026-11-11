@@ -66,9 +66,9 @@
   <td><b>{{ u.display_name }}</b><br><small>{{ u.username }}</small></td>
   <td><span class="role role-{{ u.role|lower|replace(' ', '-') }}">{{ u.role }}</span>{% if u.is_associate %}<br><small>{{ u.roster_name }}</small><br><small>Team manager: {{ u.team_manager or 'none' }}</small>{% endif %}</td>
   <td>{% if u.is_admin or u.all_programs %}All programs{% else %}{{ u.programs or 'None yet' }}{% endif %}</td>
-  <td>{{ 'Active' if u.active else 'Switched off' }}</td>
+  <td>{{ 'Active' if u.active else 'Switched off' }}{% if u.locked_minutes %}<br><span class="role">Locked, about {{ u.locked_minutes }} min left</span>{% endif %}</td>
   <td class="actions">{% if u.manageable %}
-    {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + [('reset','Reset password')] %}
+    {% for action, label in ([('disable','Switch off')] if u.active else [('enable','Switch on')]) + ([('unlock','Unlock')] if u.locked_minutes else []) + [('reset','Reset password')] %}
     <form method="post" action="{{ url_for('admin_user_action', user_id=u.id, action=action) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">{{ label }}</button></form>
     {% endfor %}
     <details class="advanced"><summary>Delete</summary>

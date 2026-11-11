@@ -2,6 +2,7 @@
 """Website routes: admin."""
 from __future__ import annotations
 
+import time
 import json
 from typing import Any, Dict, List, Optional
 
@@ -138,7 +139,9 @@ def register(app, ctx) -> None:
                     return redirect(url_for("admin_users"))
         tree = access.book.tree()
         names = {u["id"]: u["display_name"] for u in store.list_users()}
+        now = time.time()
         people = [dict(u, role=role(u), programs=_program_names(store.user_program_ids(u["id"]), tree),
+                       locked_minutes=max(1, int((u["locked_until"] - now) // 60) + 1) if u["locked_until"] > now else 0,
                        program_ids=store.user_program_ids(u["id"]), manageable=access.can_manage(u),
                        team_manager=names.get(u["team_manager_id"], ""),
                        team_choices=access.team_managers_for(u) if u["is_associate"] else [])

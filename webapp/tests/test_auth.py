@@ -7,6 +7,7 @@ users, admin-only user management, CSRF on every form, hashed passwords,
 cookie flags, and the copyright line on the login page.
 """
 from datetime import date
+import contextlib
 import re
 import sqlite3
 import tempfile
@@ -118,7 +119,7 @@ class Security(unittest.TestCase):
 
     def test_passwords_are_hashed(self):
         app, store = make_app()
-        with sqlite3.connect(store.path) as db:
+        with contextlib.closing(sqlite3.connect(store.path)) as db:             # "with sqlite3.connect" commits but does not close
             rows = db.execute("select password_hash from users").fetchall()
         for (value,) in rows:
             self.assertNotIn("pass", value)

@@ -56,6 +56,7 @@ from .merged_day import lob_of
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
 MIN_PASSWORD = MIN_PASSWORD_LENGTH
+SESSION_IDLE_MINUTES = 60  # a signed-in person with no page load for this long is signed out (owner, 2026-11-11)
 RUN_ID = re.compile(r"^[0-9a-f]{12}$")
 STATUS_WORDS = {"CHECKING": "Checking", "REJECTED": "Rejected", "QUEUED": "Queued", "GATE": "Safety gate",
                 "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "REVIEW": "Needs review",
@@ -221,7 +222,7 @@ class QuietSessions(SecureCookieSessionInterface):
     """The session cookie goes out on page loads and whenever the session changes, but not on a page's own
     background requests (previews, status polls). Phase XY: a preview started before a save and answered after it
     re-sent the session from before the save, and the save's message was lost. Page loads keep a signed-in person's
-    12 hours running as before; browsers say which requests are page loads (Sec-Fetch-Mode: navigate), and a
+    session (one idle hour) running; browsers say which requests are page loads (Sec-Fetch-Mode: navigate), and a
     request that does not say is treated as one."""
 
     def should_set_cookie(self, app: Flask, session: Any) -> bool:
@@ -284,7 +285,10 @@ def create_app(config: Dict[str, Any]) -> Flask:
         # Phase BG: on the HTTPS site the cookie is bound to this exact host (no Domain, Path=/, Secure) so a sibling
         # host or an http page cannot set or shadow it; off HTTPS (tests, a local check) the plain name stays
         SESSION_COOKIE_NAME="__Host-session" if config.get("HTTPS", True) else "session",
-        PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+        # Owner, 2026-11-11: signed out after one hour with no activity (it was 12 hours). Each page load renews it; a page's own background
+        # requests do not (QuietSessions), so a page left open does not keep itself signed in except by its own page loads (the live wallboard reloads
+        # every minute and so stays up). One hour is the ceiling: a smaller value may be configured, a larger one is not honoured.
+        PERMANENT_SESSION_LIFETIME=timedelta(minutes=min(SESSION_IDLE_MINUTES, max(1, int(config.get("SESSION_IDLE_MINUTES", SESSION_IDLE_MINUTES))))),
     )
     app.config.update({k: v for k, v in config.items() if k not in {"SECRET_KEY"}})
     app.extensions["store"] = Store(data_dir / "scheduler.db")

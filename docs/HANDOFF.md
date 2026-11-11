@@ -531,6 +531,15 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Security review and hardening (owner, 2026-11-11)
+Verdicts, the deployed patch's identity, the read-only-code design and what is still open: `docs/security/SECURITY_STATUS_2026-11-11.md`; outbound access:
+`docs/security/EGRESS_DESIGN.md`. In this release: the deployed 10-file website patch (ported byte for byte, plus its gaps closed), code owned by root and
+read-only to the website (`deploy/seal_package.sh`, `rollback.sh`, the service file, `install.sh`/`update.sh`/`apply_patch.sh`), an Unlock button for locked
+accounts (admins any; supervisors their own programs; IP release stays admin), a one-hour idle sign-out, `run_tests.sh` without a fixed `/tmp` name.
+**After the first update that installs this release, run `sudo bash /opt/scheduler/package/deploy/seal_package.sh /opt/scheduler/package` once**
+(the old installed `update.sh` hands the code back to the website account); then `--check`. Local proof: `python tools/readonly_check.py --gate` as root.
+Not done and listed there: MFA, forced change of old weak passwords, egress, SSH source range, patches, backups, independent test.
+
 ## Phase BM (owner, 2026-11-10): the forecast section rebuilt
 The owner's screens showed a number on the hour and 0 on the half hour, no way to look at 60 minutes, and the zone fixed. Plan:
 `docs/superpowers/plans/2026-11-10-phase-bm-forecast-rebuild.md`; how-to: `docs/howto/FORECAST_INTERVAL_ZONES_METHODS.md`.

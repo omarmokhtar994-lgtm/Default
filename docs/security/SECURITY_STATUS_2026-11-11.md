@@ -63,8 +63,19 @@ private temp cache disappears at stop). What it does not: a compromise of the se
 folder (schedules, database, signing key); a process that gains root is outside it; the `venv` is checked only by being root-owned and read-only (the update
 installs packages as root); Python itself and the operating system are patched separately. The seal does not make the data folder tamper-proof.
 
-**What is still unproven locally**: the exact systemd mount namespace on the server (`ProtectSystem=strict` with `ReadOnlyPaths`), and the full release gate
-with the code folder read-only as the account (run `tools/readonly_check.py --engine --gate`; its result is recorded in `evidence/phase_sec/`).
+**Run on a root-owned copy as an unprivileged account (local, 2026-11-11, `evidence/phase_sec/`).** The website's own tests that sign in and read pages, the
+engine's selfcheck and the whole release gate (83 suites, 1621 tests, 2 skipped) all passed with the code folder read-only and the cache variables the service
+sets; no file in the code folder was created or changed. The first run found one real defect, a fixed output name in `/tmp` (`/tmp/xmod.out`) in `run_tests.sh`
+that an account other than the file's creator could not use (and a symlink trap on a shared `/tmp`); it is fixed (a private temporary file) and the second run
+passed. A second finding of the same kind: development scripts under `tools/` (not used by the website or the installer) also write fixed names in `/tmp`.
+
+**Still unproven (needs the server):** the exact systemd mount namespace (`ProtectSystem=strict` with `ReadOnlyPaths`) as systemd applies it, and the first
+real run after an update with the sealed code. Evidence needed: `systemctl show scheduler-web --property=ReadWritePaths --property=ReadOnlyPaths`,
+`seal_package.sh --check`, and one real run finishing.
+
+**First update needs one extra step.** The first update runs the `update.sh` already installed, which is the old one and still gives the package to the
+website's account. The new package installs and its service file makes the code read-only to the service anyway; run `seal_package.sh` once to make root the
+owner. Later updates do it themselves.
 
 ## Independent challenge of the strengthened tests
 Each of the new regression tests was run against the original file for the change it covers and fails there; the sweeps now fail on any 500. The password test

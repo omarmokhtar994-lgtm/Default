@@ -151,9 +151,14 @@ def main() -> int:
         res = work / "results"
         res.mkdir()
         os.chmod(res, 0o777)
-        step("one real engine run (smallest example workbook, SMOKE, to the breaks) into a writable results folder",
-             [py, "runners/rc922_runner.py", "--package-root", str(code), "--results-root", str(res), "--mode", "SMOKE", "--num-workers", "2",
-              "--stage", "BEFORE_BREAKS_ONLY", "--seeds", "1", "--input", str(inp)], 3600)
+        got = step("one real engine run (smallest example workbook, QUICK, a full schedule) into a writable results folder",
+                   [py, "runners/rc922_runner.py", "--package-root", str(code), "--results-root", str(res), "--mode", "QUICK", "--num-workers", "2",
+                    "--stage", "FULL_SCHEDULE", "--seeds", "1", "--input", str(inp)], 3600, ok_codes=(0, 2))   # 2 = built but not releasable (the verdict), not a failure to run
+        verdict = [l for l in got.stdout.splitlines() if l.startswith("RELEASE VERDICT (run)")]
+        print("   ", verdict[-1] if verdict else "no verdict line")
+        sheets = [p for p in res.rglob("*.xlsx")]
+        results.append(("the run wrote a schedule workbook into the results folder", bool(sheets)))
+        print(f"{'PASS' if sheets else 'FAIL'}  the run wrote {len(sheets)} workbook(s) into the results folder")
         print("results written:", sum(1 for _ in res.rglob("*") if _.is_file()), "files")
     shutil.rmtree(work, ignore_errors=True)
     bad = [n for n, ok in results if not ok]

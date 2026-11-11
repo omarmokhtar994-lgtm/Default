@@ -106,7 +106,28 @@ sudo bash /opt/scheduler/package/deploy/update.sh ~/RC9_2_2_PRODUCTION_PACKAGE.z
 ```
 
 Users, runs and results are kept. If a run is in progress it asks first.
-If the new package fails its runtime check, the old one is put back.
+If the new package fails its runtime check, or cannot be made read-only (below), the old one is put back.
+
+**The code is read-only to the website.** The update makes the code folder owned by root: the `scheduler` account can read and run it but cannot
+change it, and the service may write only `/var/lib/scheduler`. A compromise of the website therefore cannot rewrite the code that runs next time.
+Check it any time (nothing is changed):
+
+```
+sudo bash /opt/scheduler/package/deploy/seal_package.sh --check /opt/scheduler/package
+sudo systemctl show scheduler-web --property=ReadWritePaths --property=ReadOnlyPaths
+```
+
+The first should say `SEALED`; the second should list only `/var/lib/scheduler` as writable.
+
+**Going back.** `sudo bash /opt/scheduler/package/deploy/rollback.sh` puts the previous version back exactly as it was, with its own service file
+(so after rolling back past this hardening the service can write its code again; update to harden it). The version rolled back from is kept in
+`/opt/scheduler/package.rolled-back`.
+
+**Signed out after one hour.** A person with no page load for an hour is signed out. Their next click goes to the sign-in page. The live wallboard
+reloads itself every minute and so stays up.
+
+**Locked accounts.** After five wrong passwords an account is locked for 15 minutes. An admin, or a supervisor for people in their own programs,
+presses **Unlock** next to the person on the People page. Releasing a held IP address stays with admins.
 
 ## Teams or Slack posts (optional)
 

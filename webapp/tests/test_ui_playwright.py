@@ -3962,7 +3962,8 @@ class TheVolumesInTheBrowser(unittest.TestCase):
         page = self.page(width=1280, height=900)
         self.sign_in(page)
         page.goto(self.url())
-        page.locator("[data-fill='#total']").click()
+        # Phase BM: each method in the table of methods has its own "Use this number" that fills the same box, so the suggestion's button is named
+        page.get_by_role("button", name="Use the suggestion").click()
         self.assertRegex(page.input_value("#total"), r"^\d[\d,]*$")
 
     def test_no_tab_scrolls_the_page_sideways_on_a_tablet_or_a_phone(self):

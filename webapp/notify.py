@@ -8,8 +8,10 @@ it is kept in the server's database, checked before it is saved and again before
 full again."""
 from __future__ import annotations
 
+import http.client
 import json
 import logging
+import re
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -73,6 +75,8 @@ def check_link(url: str) -> str:
         raise ValueError("Paste the group link.")
     if len(url) > LINK_MAX:
         raise ValueError("That link is too long to be a group link.")
+    if re.search(r"[\x00-\x20\x7f]", url):  # audit 2026-11-11: a space or control character inside a link is a typo, and http.client's error for it quotes the path (the secret)
+        raise ValueError(NOT_GROUP)
     parts = urlsplit(url)
     if parts.scheme.lower() != "https":
         raise ValueError(NOT_HTTPS)
@@ -369,8 +373,8 @@ def send_json(url: str, body: Dict[str, Any], timeout: float = TIMEOUT) -> Tuple
             code = answer.status
     except urllib.error.HTTPError as exc:
         code = exc.code
-    except (urllib.error.URLError, OSError, ValueError):
-        return False, 0
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException):
+        return False, 0  # never the error's own text: http.client's InvalidURL holds the link's path, which is the secret
     return 200 <= code < 300, code
 
 

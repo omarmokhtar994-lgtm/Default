@@ -22,6 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from openpyxl import load_workbook
 
+from .cellsafe import keep_text
 from .clock import EGYPT
 from .week import compact
 
@@ -739,6 +740,7 @@ def with_notes(path: Path, view: Dict[str, Any]) -> "io.BytesIO":
             ws.cell(r, c, v)
     ws.column_dimensions["A"].width = 30
     ws.column_dimensions["B"].width = 70
+    keep_text(ws)  # a typed reason or name that starts with "=" stays text (audit 2026-11-11)
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)

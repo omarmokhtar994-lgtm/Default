@@ -17,7 +17,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from webapp import bulk_users, erlang, volumes_io, zipcheck
+from webapp import bulk_users, channel_export, channel_template, erlang, notify, versions, volumes_io, zipcheck
 from webapp import store as store_module
 from webapp.access import Access
 from webapp.programs import ProgramBook
@@ -493,6 +493,71 @@ class ARunWorkbookHasARunSizedLimit(unittest.TestCase):
         for name in ("runs.py", "channel_needs.py"):
             text = (Path(__file__).resolve().parents[1] / "routes" / name).read_text()
             self.assertIn("zip_problem(path, **RUN_LIMITS)", text, name)
+
+
+class FreeTextInADownloadStaysText(unittest.TestCase):
+    """Leads versions.with-notes.reason-formula-injection (and its sibling notes on the channel plan and channel template downloads). openpyxl stores a string
+    that starts with "=" as a formula, so a reason or a name typed by one person ("=HYPERLINK(...)") became a live formula in a workbook another person
+    opens in Excel. Cells in these three downloads that would be formulas are now plain text, the words unchanged."""
+    EVIL = '=HYPERLINK("https://example.invalid","click")'
+
+    def formulas(self, ws):
+        return [c.coordinate for row in ws.iter_rows() for c in row if c.data_type == "f"]
+
+    def test_version_notes_keep_a_typed_reason_as_text(self):
+        from openpyxl import Workbook, load_workbook
+        path = Path(tempfile.mkdtemp()) / "week.xlsx"
+        self.addCleanup(shutil.rmtree, path.parent, True)
+        Workbook().save(path)
+        view = {"row": {"label": self.EVIL, "in_use": 1}, "added": [{"severity": "red", "text": self.EVIL}],
+                "changes": [{"at": 1_700_000_000.0, "by_name": self.EVIL, "associate": self.EVIL, "day": "Mon", "old": "=1+1", "new": "=2+2",
+                             "reason": self.EVIL, "severity": "yellow"}]}
+        ws = load_workbook(versions.with_notes(path, view))["Version Notes"]
+        self.assertEqual(self.formulas(ws), [])
+        texts = [c.value for row in ws.iter_rows() for c in row]
+        self.assertIn(self.EVIL, texts)  # the words are still there, unchanged
+
+    def test_the_channel_plan_keeps_names_and_languages_as_text(self):
+        from openpyxl import load_workbook
+        grid = {"cols": [0], "rows": [{"name": "=1+1", "language": "=2+2", "runs": [(0, 60, "P")], "cells": [{"letter": "P"}]}]}
+        wb = load_workbook(io.BytesIO(channel_export.channel_plan_workbook("Unit", [("Mon", grid)])))
+        self.assertEqual([(ws.title, self.formulas(ws)) for ws in wb if self.formulas(ws)], [])
+        self.assertIn("=1+1", [c.value for row in wb["Mon"].iter_rows() for c in row])
+
+    def test_the_channel_template_keeps_a_language_name_as_text(self):
+        from openpyxl import Workbook
+        ws = Workbook().active
+        channel_template._lists(ws, 15, ["=1+1", "English"])
+        self.assertEqual(self.formulas(ws), [])
+        self.assertEqual(ws["Z5"].value, "=1+1")
+        self.assertEqual(ws["Z6"].value, "English")
+
+
+class AGroupLinkIsCheckedAndNeverLogged(unittest.TestCase):
+    """Lead notify.send-invalid-url-logs-webhook-link (project rule: notification secrets never go in logs). ``check_link`` let a space or control character
+    inside the path through; ``http.client`` then raised InvalidURL, whose message holds the whole path (the secret), and nothing caught it, so the
+    callers logged it on every try. A link with such a character is refused when it is saved, and a transport error never escapes ``send_json``."""
+    SECRET = "https://hooks.slack.com/services/T0/B0/SECRETTOKEN"
+
+    def test_a_good_link_is_still_accepted(self):
+        self.assertEqual(notify.check_link(self.SECRET), "slack")
+        self.assertEqual(notify.check_link(f" {self.SECRET} "), "slack")  # the ends are trimmed, as before
+
+    def test_a_space_or_control_character_inside_the_link_is_refused(self):
+        for bad in (self.SECRET + " x", self.SECRET + "\x01", self.SECRET + "\x7f", "https://hooks.slack.com/serv ices/T0/B0/X"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    notify.check_link(bad)
+
+    def test_a_transport_error_with_the_path_in_it_does_not_escape_and_is_not_repeated(self):
+        import http.client
+        boom = http.client.InvalidURL(f"URL can't contain control characters. /services/T0/B0/SECRETTOKEN (found at least ' ')")
+        with mock.patch.object(notify._OPENER, "open", side_effect=boom):
+            self.assertEqual(notify.send_json(self.SECRET, {"text": "hi"}), (False, 0))
+
+    def test_the_real_transport_gives_up_quietly_on_a_link_it_cannot_send_to(self):
+        # no network is needed: http.client refuses the path before it connects
+        self.assertEqual(notify.send_json("https://hooks.slack.com/services/T0/B0/ SECRETTOKEN", {"text": "hi"}), (False, 0))
 
 
 if __name__ == "__main__":

@@ -115,7 +115,10 @@ def _lists(ws, step: int, languages: List[str]) -> dict:
     for col, label, values in (("X", "Times", times), ("Y", "Days", DAY_CHOICES), ("Z", "Languages", languages)):
         ws[f"{col}4"] = label
         for i, value in enumerate(values, start=5):
-            ws[f"{col}{i}"] = value
+            cell = ws[f"{col}{i}"]
+            cell.value = value
+            if cell.data_type == "f":  # a language name typed as "=..." stays text (audit 2026-11-11)
+                cell.data_type = "s"
         ws.column_dimensions[col].hidden = True
         out[label] = f"${col}$5:${col}${4 + max(len(values), 1)}"
     return out

@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-HELPER = REPO / "evidence" / "phase_bl" / "ab_model_hash.py"
-INPUTS = REPO / "packages" / "rc9_2_2_production" / "inputs"
+HELPER = REPO / "tools" / "stage1_model_hash.py"        # ships with the package; evidence/phase_bl/ab_model_hash.py is the same file
+INPUTS = next(p for p in (REPO / "inputs", REPO / "packages" / "rc9_2_2_production" / "inputs") if p.exists())   # the package, or the repository
 ORTOOLS = "9.15.6755"
 PINS = {  # workbook: (associates, shifts, hash), measured at 40aec97 and at Phase BL
     "AE_AR_B2B.xlsx": ("35", "24", "06b3708c287df3c5f4c64cebe3b633778f487a168435c7c573b51c2902078b8d"),

@@ -116,8 +116,12 @@ def main() -> int:
         skip = {l.strip() for l in (code / "webapp" / "tests" / "solver_modules.txt").read_text().splitlines() if l.startswith("test_")}
         mods = sorted(p.stem for p in (code / "webapp" / "tests").glob("test_*.py") if p.stem not in skip and "playwright" not in p.stem)
 
+        home = work / "home"                                   # the service's own account has a home in the data folder (LibreOffice keeps its profile there)
+        home.mkdir()
+        os.chmod(home, 0o777)
+
         def one(mod):
-            got = as_nobody([py, "-m", "unittest", f"webapp.tests.{mod}"], {**env, "TMPDIR": str(tmp)}, code, 1800)
+            got = as_nobody([py, "-m", "unittest", f"webapp.tests.{mod}"], {**env, "TMPDIR": str(tmp), "HOME": str(home)}, code, 1800)
             return mod, got.returncode, got.stdout + got.stderr
 
         before = snapshot(code)
@@ -125,11 +129,17 @@ def main() -> int:
             done = list(pool.map(one, mods))
         changed = touched(before, code)
         failed = [(m, out) for m, rc, out in done if rc]
-        wrote = [m for m, out in failed if any(w in out for w in ("Permission denied", "Read-only file system", "PermissionError", "EACCES"))]
-        print(f"web test modules: {len(done)} run, {len(done) - len(failed)} passed, {len(failed)} failed; {len(wrote)} failed with a permission or read-only error")
+        needs = ("Permission denied", "Read-only file system", "PermissionError", "EACCES")
+        into_code = [m for m, out in failed if any(w in out for w in needs) and not all("/evidence/" in line for line in out.splitlines() if any(w in line for w in needs))]
+        evidence_only = [m for m, out in failed if any(w in out for w in needs) and m not in into_code]
+        print(f"web test modules: {len(done)} run, {len(done) - len(failed)} passed, {len(failed)} failed; "
+              f"{len(into_code)} wrote or tried to write into the code; {len(evidence_only)} only tried to save a development screenshot under evidence/")
+        for m in evidence_only:
+            print(f"  development screenshot writer (not part of the website): {m}")
         for m, out in failed[:12]:
             print(f"  FAILED {m}: " + (out.strip().splitlines() or [''])[-1][:160])
-        results.append(("website test modules, none failed on a write into the code", not wrote and not changed))
+        wrote = into_code
+        results.append(("website test modules, none wrote into the code folder", not wrote and not changed))
         print(f"{'PASS' if not wrote and not changed else 'FAIL'}  no website test wrote into the code folder" + (f"   touched: {changed[:5]}" if changed else ""))
         (work / "web_failed.txt").write_text("\n".join(m for m, _ in failed))
         if failed:

@@ -256,6 +256,9 @@ class SwapBook:
         row = self._get(swap_id)
         if not user.get("is_associate") or user.get("roster_name") != row["other"]:
             raise ValueError(f"Only {row['other']} can answer this.")
+        target = self.account(row["program"], row["other"])  # audit 2026-11-11: the account the offer resolved, not a namesake of another program
+        if target is None or target["id"] != user["id"]:
+            raise ValueError(f"Only {row['other']} can answer this.")
         if not self.store.move_swap(swap_id, "waiting_other", status="waiting_tm" if accept else "declined",
                                     answered_at=time.time()):
             raise ValueError(self._decided(swap_id))

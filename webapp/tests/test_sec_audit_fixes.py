@@ -15,6 +15,8 @@ from unittest import mock
 
 from webapp import store as store_module
 from webapp.access import Access
+from webapp.programs import ProgramBook
+from webapp.swaps import SwapBook
 from webapp.store import LOCK_AFTER_FAILURES, Store
 from webapp.tests import test_ar_walls as fx
 from webapp.tests.test_channel_people import add_version
@@ -259,6 +261,89 @@ class SignInHoldsUnderParallelGuesses(unittest.TestCase):
                 self.store.authenticate(who, password)
                 got[name] = counts[-1]
         self.assertEqual(set(got.values()), {2}, got)
+
+
+class ASwapIsAnsweredByTheAccountItWasOfferedTo(unittest.TestCase):
+    """Lead swaps.answer.roster-name-without-program: ``answer`` trusted the roster name alone, and the same name may sit on associate accounts of two
+    programs that share nobody, so an associate of another program could accept or decline a swap offered to someone else. The answer now needs the
+    account the offer resolved: the associate account of that name that holds the swap's program."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.store = Store(self.dir / "scheduler.db")
+        programs = ProgramBook(self.store)
+        self.a, self.b = programs.add_program("ONE"), programs.add_program("TWO")
+        self.unit_a, self.unit_b = programs.add_lob(self.a, "One Unit"), programs.add_lob(self.b, "Two Unit")
+
+    def associate(self, username, program, roster="Associate 07"):
+        uid = self.store.add_user(username, username.title(), "Associate-pass-1", must_change=False)
+        self.store.update_user(uid, is_associate=1, roster_name=roster)
+        self.store.set_user_programs(uid, [program])
+        return self.store.get_user(uid)
+
+    def swap(self, book, other="Associate 07"):
+        return self.store.add_swap(program=self.unit_a, day="2026-10-14", asker="Associate 01", asker_user=1, other=other,
+                                   asker_cell="09:00 - 18:00", other_cell="11:00 - 20:00")
+
+    def test_the_named_colleague_of_that_program_can_answer(self):
+        book = SwapBook(self.store, None, skills=lambda program: {})
+        real = self.associate("real_one", self.a)
+        sid = self.swap(book)
+        self.assertEqual(book.answer(sid, real, accept=True), "Accepted. Your TM decides next.")
+        self.assertEqual(self.store.get_swap(sid)["status"], "waiting_tm")
+
+    def test_a_namesake_of_another_program_cannot_answer(self):
+        book = SwapBook(self.store, None, skills=lambda program: {})
+        self.associate("real_one", self.a)
+        namesake = self.associate("namesake", self.b)  # same roster name, a program that shares nobody with ONE
+        sid = self.swap(book)
+        for accept in (True, False):
+            with self.assertRaises(ValueError):
+                book.answer(sid, namesake, accept=accept)
+        self.assertEqual(self.store.get_swap(sid)["status"], "waiting_other")
+
+    def test_a_namesake_cannot_answer_before_the_real_colleague_does_either(self):
+        book = SwapBook(self.store, None, skills=lambda program: {})
+        namesake = self.associate("namesake", self.b)
+        sid = self.swap(book)  # no account of that name holds ONE at all
+        with self.assertRaises(ValueError):
+            book.answer(sid, namesake, accept=True)
+
+
+class ACoachingCancelNeverNamesAnotherProgram(fx._Walls):
+    """Lead coaching.cancel.redirect-program-name-leak: cancelling a request by number redirected to the request's own program page, so the Location header
+    named the program of any request number, and told a missing number from a real one. A person who cannot open the request's program now gets the same
+    answer as for a number that does not exist."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        base = dict(kind="coaching", shift_date="2027-06-30", requester_name="x", names="[]", detail='{"start": 600, "minutes": 30, "billable": false}', why="", status="waiting")
+        cls.theirs = cls.store.add_change_request(program=cls.bravo, requester_id=cls.users["tm_b"], **base)
+        cls.ours = cls.store.add_change_request(program=cls.alpha, requester_id=cls.users["tm_a"], **base)
+
+    def cancel(self, who, request_id):
+        client = sign_in(self.app, who, fx.PASSWORD)
+        return client.post(f"/requests/coaching/{request_id}/cancel", data={"csrf_token": token(client)}, follow_redirects=False)
+
+    def test_another_programs_request_looks_like_a_missing_one(self):
+        got, missing = self.cancel("plan_a", self.theirs), self.cancel("plan_a", 999999)
+        self.assertEqual(got.status_code, missing.status_code)
+        self.assertNotIn(self.bravo, got.headers.get("Location", ""))
+        self.assertEqual(got.headers.get("Location"), missing.headers.get("Location"))
+        self.assertEqual(self.store.get_change_request(self.theirs)["status"], "waiting")
+
+    def test_a_request_of_the_persons_own_program_still_answers_with_that_program(self):
+        got = self.cancel("plan_a", self.ours)  # not theirs to cancel: refused in words, back to their own program
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("program=", got.headers["Location"])
+        self.assertEqual(self.store.get_change_request(self.ours)["status"], "waiting")
+
+    def test_the_requester_still_cancels_their_own(self):
+        got = self.cancel("tm_a", self.ours)
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual(self.store.get_change_request(self.ours)["status"], "cancelled")
 
 
 if __name__ == "__main__":

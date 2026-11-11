@@ -114,12 +114,17 @@ def register(app, ctx) -> None:
         if g.user["is_associate"] or not _can_ask_coaching():
             abort(403, description="Your role cannot ask for coaching here.")
         row = app.extensions["store"].get_change_request(request_id)
+        if row is None or not ctx._access().can_open(row["program"]):
+            # Audit 2026-11-11: a request of a program this person cannot open answers exactly like a number that does not exist, so the redirect
+            # never names its program and the answer does not say the number is real.
+            flash("That is not your request.")
+            return redirect(url_for("requests_coaching"), code=303)
         try:
             app.extensions["changes"].cancel(request_id, g.user)
             flash("Cancelled.")
         except ValueError as exc:
             flash(str(exc))
-        return redirect(url_for("requests_coaching", program=row["program"] if row else None), code=303)
+        return redirect(url_for("requests_coaching", program=row["program"]), code=303)
 
     def _can_ask_coaching() -> bool:
         store = app.extensions["store"]

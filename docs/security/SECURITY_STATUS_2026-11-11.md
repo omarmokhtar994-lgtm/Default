@@ -85,6 +85,31 @@ Each of the new regression tests was run against the original file for the chang
 covers padding with six invisible characters, the real-password-with-padding case, the add-account path, the bulk-sheet path and the store. What the tests
 cannot show: that an unknown caller of `set_password` passes a short password through a new code path (now refused in the store), or live behaviour.
 
+## Source-audit leads fixed (owner, 2026-11-11: "Fix all")
+A source-only audit of `webapp/` and `deploy/` (`evidence/phase_sec_audit/`, 45 agents, four hunting waves, nothing executed) left 12 leads that needed a
+test, plus one defect against the rule that notification secrets never go in logs. Each is now reproduced by a failing test first and fixed; the tests are
+`webapp/tests/test_sec_audit_fixes.py`. Where a lead was a policy question the owner's "Fix all" settled it as a defect. The audit's own wording was checked
+while fixing: two leads were weaker than written and one was stronger (see `evidence/phase_sec_audit/FIXES.md`).
+
+| Lead | Fix |
+|---|---|
+| Day-page POSTs checked one program and acted on another | The program wall checks every program the request names (query and form) |
+| Replan, Rescue and Bulk skipped the role back-limit | The back-limit checks the date of every move and the earliest day a window reaches |
+| A removed uploader kept control of a run and the live schedule | A run of a program needs that program, also for its uploader; a run with no program stays with its uploader |
+| A supervisor could take over a person who also holds other programs | A manager acts only on people whose programs are all the manager's own |
+| Lockout counter lost updates; padded passwords revealed usernames by time | One atomic update, a lock re-check for a right password, two hashes for every answer |
+| A swap could be answered by a namesake of another program | The answer needs the account the offer resolved |
+| Cancelling a coaching request named another program | A request of a program the person cannot open answers like a missing number |
+| Sheet readers padded every row to 16,384 cells and read every row | Rows cut at 64 cells and refused beyond a row limit while reading |
+| A schedule upload could open to 250 MB in the web process | A schedule upload has its own limit (25 MB a member, 40 MB in all) |
+| The staffing search recomputed its sums at every step | Same answers (checked against the old search), linear cost; an interval beyond 50,000 Erlangs is refused in words |
+| Typed names and reasons became formulas in three downloads | Those cells are plain text |
+| A group link with a space was accepted and its path logged | Refused when saved; a transport error never escapes or is logged |
+
+Not done, and why: a `MemoryMax=` (and `TasksMax=`) in the service unit. The engine's peak memory for a full schedule run is not measured, and a cap set without
+it could kill legitimate runs, which the project rules forbid as an unmeasured change. Next step for the owner or a later phase: measure the peak resident memory
+of a full run on the 24 GB host, then set a cap above it. Also not done, left as hardening notes in the audit report: about a hundred smaller items.
+
 ## Open items, owners and the smallest next step
 | Item | Owner | Next step |
 |---|---|---|
@@ -96,6 +121,8 @@ cannot show: that an unknown caller of `set_password` passes a short password th
 | MFA/SSO, backups and a restore test, alerting | Owner and InfoSec | Evidence, not code |
 | Webhook destinations and what posts may carry | Owner and the group owners | Approve the list; webhook links are secrets in the database |
 | Independent vulnerability assessment | InfoSec | Scope in the bundle's `INDEPENDENT_ASSESSOR_SCOPE.txt` |
+| Memory cap for the service | Owner | Measure the peak memory of a full schedule run, then set `MemoryMax=` above it (not guessed here) |
+| Confirm the audit leads on a running copy | Owner | The audit read source only; the new tests reproduce each lead locally, but a staging check of the same cases is still the proof for the live site |
 
 ## InfoSec-facing statement
 The website has been reviewed in source and exercised locally, three defects were corrected and deployed, further gaps found in that review are corrected in

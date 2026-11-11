@@ -3,7 +3,7 @@
  "repo": "Default (Team Scheduler)",
  "target": "/home/user/Default",
  "source_ref": "8fec106d68e4e630dba5263f1e778e8b7e06bd94 (worktree clean)",
- "profile": "quick",
+ "profile": "standard",
  "scope_paths": [
   "webapp/",
   "deploy/"
@@ -14,6 +14,8 @@
  "prior_runs": [],
  "shared_file_owners": "parent",
  "run_status": "complete",
- "agents_spent": 21,
- "coverage": "partial (quick profile)"
+ "agents_spent": 34,
+ "coverage": "partial",
+ "profile_note": "Started as quick; changed to standard for wave 2 at the owner's request (second wave over deferred units)",
+ "waves": 2
 }

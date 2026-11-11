@@ -30,3 +30,14 @@ equality it guards is unchanged).
 ## Not done
 - `MemoryMax=` / `TasksMax=` for the service: not measured, so not guessed (project rule on unmeasured changes). Next step is in `docs/security/SECURITY_STATUS_2026-11-11.md`.
 - The hardening notes in `REPORT.md` section 6 (about a hundred small items) are left as notes, except the three that were part of leads above.
+
+## Checks and package (2026-11-12, Egypt time)
+- Whole chain on the fix commits: 291 units passed (website suites one module each, channel-solver modules alone, browser classes), none failed.
+- Package `dist/RC9_2_2_PRODUCTION_PACKAGE.zip`, 18.37 MB, 2,704 files, sha256 `4c7a7d8f9c2018a93674c80e69d22c0772122a06ce4c5dd863def92a3a6f74f4`, built from commit
+  `f9b31c0`. Its own release gate: `GATE PASS: 83 suites, 1621 tests (2 skipped) + 2 selfchecks + cross-module call signatures + undefined-name sweep`.
+- Sealed and run as an unprivileged account on that exact zip (`readonly_fixes_package_gate.txt`): sealed, sign-in tests pass, both compile checks pass, release gate passes,
+  nothing tried to write the code folder.
+- Engine, tests, tools and deploy are unchanged from the audited commit (`git diff 8fec106..HEAD -- engine tests tests_staged tools deploy` is empty); the RC9.1 baseline
+  workbooks and `engine/regression_assets` keep their bytes.
+- Not checked: the new rules on the live server (this was local). The owner installs the package; the first update runs the old installed `update.sh`, so run `seal_package.sh`
+  once afterwards, as before.

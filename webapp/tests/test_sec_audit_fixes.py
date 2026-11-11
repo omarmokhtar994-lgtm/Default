@@ -5,6 +5,7 @@ Each class pins one lead with made-up people and programs. The audit could not r
 Where a lead was a policy question (a supervisor managing someone who also holds other programs; an uploader keeping a run after losing its program) the
 owner's "Fix all" settles it: the stricter rule is the contract."""
 import unittest
+from datetime import date
 
 from webapp.access import Access
 from webapp.tests import test_ar_walls as fx
@@ -91,6 +92,71 @@ class ARunOutlivesNothing(fx._Walls):
         client = sign_in(self.app, "ex_member", fx.PASSWORD)
         self.lose_alpha()
         self.assertEqual(client.get("/runs/00000000a901").status_code, 200)
+
+
+class TheDayPageChecksEveryProgramAndEveryDate(fx._Walls):
+    """Leads day.post.program.gate-source-mismatch and day.replan-rescue.dated-move-bypasses-back-limit. The program wall read the query string first while the
+    day handlers read the form field, so ``?program=ALPHA`` (or an empty ``?program=``) with a form naming BRAVO passed the wall and wrote BRAVO's day. The
+    wall now checks every program a request names. The role back-limit (planner 1 day, supervisor 7, admin none) looked only at the form's date and first;
+    a move dated in the form, or a window starting days back, slipped past it. It now checks every date the request names."""
+    TODAY = date(2026, 10, 14)
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.app.config["TODAY"] = cls.TODAY
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.app.config.pop("TODAY", None)
+
+    def post(self, client, url, **data):
+        return client.post(url, data={"csrf_token": token(client), **data}, follow_redirects=False)
+
+    def test_a_form_program_the_person_cannot_open_is_refused_whatever_the_query_says(self):
+        client = sign_in(self.app, "plan_a", fx.PASSWORD)
+        for endpoint in ("break", "send", "cover", "attendance", "bulk/apply", "replan/apply", "rescue/apply"):
+            for query in ("", f"?program={self.alpha}", "?program=", f"?program={self.alpha}&program={self.bravo}"):
+                with self.subTest(endpoint=endpoint, query=query):
+                    got = self.post(client, f"/day/{endpoint}{query}", program=self.bravo, date="2026-10-14")
+                    self.assertEqual(got.status_code, 403)
+
+    def test_a_form_program_the_person_can_open_is_not_refused(self):
+        client = sign_in(self.app, "plan_a", fx.PASSWORD)
+        got = self.post(client, f"/day/break?program={self.alpha}", program=self.alpha, date="2026-10-14")
+        self.assertNotEqual(got.status_code, 403)
+
+    def closed_message(self, got, client):
+        self.assertEqual(got.status_code, 303)
+        return "closed to changes for your role" in client.get(got.headers["Location"]).get_data(as_text=True)
+
+    def test_a_planner_cannot_move_a_break_on_a_day_dated_inside_the_form(self):
+        client = sign_in(self.app, "plan_a", fx.PASSWORD)
+        old = "2026-10-04"  # ten days before the pinned today
+        for endpoint in ("replan/apply", "rescue/apply"):
+            with self.subTest(endpoint):
+                got = self.post(client, f"/day/{endpoint}", program=self.alpha, date="2026-10-14",
+                                move=f"Alpha Person One|0|600|{old}")
+                self.assertTrue(self.closed_message(got, client))
+
+    def test_a_planner_cannot_start_a_window_days_back(self):
+        client = sign_in(self.app, "plan_a", fx.PASSWORD)
+        for endpoint in ("bulk/apply", "rescue/apply"):
+            with self.subTest(endpoint):
+                got = self.post(client, f"/day/{endpoint}", program=self.alpha, date="2026-10-14", start="-9999")
+                self.assertTrue(self.closed_message(got, client))
+
+    def test_dates_inside_the_planners_limit_are_not_closed(self):
+        client = sign_in(self.app, "plan_a", fx.PASSWORD)
+        got = self.post(client, "/day/replan/apply", program=self.alpha, date="2026-10-14", move="Alpha Person One|0|600|2026-10-13")
+        self.assertFalse(self.closed_message(got, client))
+
+    def test_a_supervisor_has_seven_days_and_an_admin_has_no_limit(self):
+        for who, closed in (("sup_a", True), ("omar", False)):
+            with self.subTest(who):
+                client = sign_in(self.app, who, "Owner-pass-123" if who == "omar" else fx.PASSWORD)
+                got = self.post(client, "/day/replan/apply", program=self.alpha, date="2026-10-14", move="Alpha Person One|0|600|2026-10-01")
+                self.assertEqual(self.closed_message(got, client), closed)
 
 
 if __name__ == "__main__":

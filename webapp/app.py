@@ -383,7 +383,7 @@ def create_app(config: Dict[str, Any]) -> Flask:
         g.zone = request.args["tz"] if request.args.get("tz") in dict(ZONES) else (ctx._pc_zone() or HOME)
         if g.get("user") and request.method == "POST" and request.endpoint in ctx.DAY_WRITES:
             try:
-                ctx._still_editable(ctx._date(request.form.get("date", "")), ctx._date(request.form.get("first", "")))
+                ctx._still_editable(*_dates_a_day_post_touches())  # audit 2026-11-11: every date the form names, not only date and first
             except ValueError as exc:
                 if "application/json" in request.headers.get("Accept", ""):
                     return jsonify(error=str(exc)), 400
@@ -392,9 +392,11 @@ def create_app(config: Dict[str, Any]) -> Flask:
                                     request.form.get("view", ""))
         # Phase Q: a program page opens only for people with that program (New schedule is open to everyone).
         if g.get("user") and request.endpoint not in OPEN_TO_ALL:
-            key = (request.view_args or {}).get("name") if request.endpoint == "program" else \
-                clean_program(request.values.get("program", ""))
-            if key and not _access().can_open(key):
+            if request.endpoint == "program":
+                keys = [(request.view_args or {}).get("name")]
+            else:  # audit 2026-11-11: every program the request names, query string and form alike (handlers read the form, the wall used to read the query first)
+                keys = [clean_program(v) for v in request.args.getlist("program") + request.form.getlist("program")]
+            if any(key and not _access().can_open(key) for key in keys):
                 g.error_hint = "Your account opens only the programs given to you. Ask an admin to add this one to your programs."
                 # Phase AR (owner, 2026-10-21: nothing of another program is visible): the refusal never says whether the
                 # program exists or what it is called; words from a link are never repeated back either.
@@ -416,6 +418,20 @@ def create_app(config: Dict[str, Any]) -> Flask:
                 flash(message)
                 return redirect(url_for("day_page", program=program, date=on.isoformat(),
                                         tz=ctx._own_zone(program, on)), code=303)
+
+    def _dates_a_day_post_touches() -> list:
+        """Every date a post of the day page can change, for the role back-limit: the page's day and ``first``, the date a move carries
+        ("name|idx|minute|YYYY-MM-DD"), and the earliest day a window that starts ``start`` minutes from midnight reaches."""
+        on = ctx._date(request.form.get("date", ""))
+        days = [on, ctx._date(request.form.get("first", ""))]
+        for item in request.form.getlist("move"):
+            found = re.search(r"\|(\d{4}-\d{2}-\d{2})$", item)
+            if found:
+                days.append(ctx._date(found.group(1)))
+        start = request.form.get("start", "0")
+        if on is not None and re.match(r"^-?\d{1,4}$", start):
+            days.append(on + timedelta(days=int(start) // 1440))
+        return days
 
     def _route_to_lob() -> None:
         """Phase AP (owner, 2026-10-21: edits go through to each person's own LOB): a form from the merged RTA page

@@ -151,9 +151,9 @@ def main() -> int:
         res = work / "results"
         res.mkdir()
         os.chmod(res, 0o777)
-        got = step("one real engine run (smallest example workbook, QUICK, a full schedule) into a writable results folder",
+        got = step("one real engine run (smallest example workbook, QUICK, a full schedule, 2 minutes of solving) into a writable results folder",
                    [py, "runners/rc922_runner.py", "--package-root", str(code), "--results-root", str(res), "--mode", "QUICK", "--num-workers", "2",
-                    "--stage", "FULL_SCHEDULE", "--seeds", "1", "--input", str(inp)], 3600, ok_codes=(0, 2))   # 2 = built but not releasable (the verdict), not a failure to run
+                    "--stage", "FULL_SCHEDULE", "--seeds", "1", "--time-limit", "120", "--input", str(inp)], 1800, ok_codes=(0, 2))   # 2 = built but not releasable (the verdict), not a failure to run
         verdict = [l for l in got.stdout.splitlines() if l.startswith("RELEASE VERDICT (run)")]
         print("   ", verdict[-1] if verdict else "no verdict line")
         sheets = [p for p in res.rglob("*.xlsx")]

@@ -14,6 +14,7 @@ from ..access import Access, role
 from ..app import MIN_PASSWORD, USERNAME_RULE, username_problem
 from ..auth import admin_required, manager_required
 from ..bulk_users import new_password, passwords_workbook, people_workbook, read_people, template_bytes
+from ..store import clean_password
 
 
 def register(app, ctx) -> None:
@@ -39,6 +40,7 @@ def register(app, ctx) -> None:
         planned: List[Dict[str, Any]] = []
         seen: set = set()
         for r in rows:
+            r = {**r, "password": clean_password(r.get("password", ""))}
             username = r["username"].strip().lower()
             problems: List[str] = []
             kind = " ".join(r["role"].lower().replace("_", " ").split()).replace(" ", "_") or "planner"

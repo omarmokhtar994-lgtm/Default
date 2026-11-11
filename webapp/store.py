@@ -448,8 +448,16 @@ def clean_password(password: str) -> str:
     return (password or "").strip(_PASTE_JUNK)
 
 
+MIN_PASSWORD_LENGTH = 10  # the floor for every stored password, checked where the hash is made (the pages check too, to say it in words)
+
+
 def hash_password(password: str) -> str:
-    return generate_password_hash(clean_password(password), method="scrypt")
+    """The hash of exactly what a person will type: the cleaned password. The floor is checked on that same string, so padding cannot reach it
+    (the pages' own check and this one agree because they use one cleaning)."""
+    cleaned = clean_password(password)
+    if len(cleaned) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"A password needs at least {MIN_PASSWORD_LENGTH} characters, not counting spaces and invisible characters at its ends.")
+    return generate_password_hash(cleaned, method="scrypt")
 
 
 _DUMMY_HASH = generate_password_hash("Dummy-never-matches-1!", method="scrypt")

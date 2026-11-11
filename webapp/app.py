@@ -48,14 +48,14 @@ from .schedules import ScheduleBook, group_changes
 from .versions import zoned_label
 from .paging import page_of
 from .runs import MODES, OPTION_LABELS, RunQueue, run_options
-from .store import Store
+from .store import MIN_PASSWORD_LENGTH, Store, clean_password
 from .throttle import SignInThrottle
 from werkzeug.datastructures import ImmutableMultiDict
 from .change_requests import ChangeBook
 from .merged_day import lob_of
 
 COPYRIGHT = "© 2026 Omar Mokhtar. All rights reserved."
-MIN_PASSWORD = 10
+MIN_PASSWORD = MIN_PASSWORD_LENGTH
 RUN_ID = re.compile(r"^[0-9a-f]{12}$")
 STATUS_WORDS = {"CHECKING": "Checking", "REJECTED": "Rejected", "QUEUED": "Queued", "GATE": "Safety gate",
                 "RUNNING": "Running", "SCORING": "Scoring", "DONE": "Approved", "REVIEW": "Needs review",
@@ -256,6 +256,8 @@ def password_is_weak(password: str) -> bool:
 
 
 def password_problem(new: str, confirm: str, username: str) -> str:
+    # Validate exactly the password that hash_password will store.
+    new, confirm = clean_password(new), clean_password(confirm)
     if len(new) < MIN_PASSWORD:
         return f"Use at least {MIN_PASSWORD} characters."
     if new != confirm:

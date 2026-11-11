@@ -277,6 +277,7 @@ class TheHeaders(_Secured):
         missing = []
         for rule in rules(self.app, "GET")[:60]:
             got = client.get(url_of(self.app, rule))
+            self.assertLess(got.status_code, 500, rule.rule)
             for h in ("Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy",
                       "Permissions-Policy", "Cache-Control"):
                 if h not in got.headers:

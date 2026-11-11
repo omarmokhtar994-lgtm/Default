@@ -100,6 +100,8 @@ class TheRoleRules(_Secured):
                 got = client.get(url)
             else:
                 got = client.post(url, data={**fx.FORM, "program": self.alpha, "csrf_token": tok})
+            if got.status_code >= 500:
+                wrong.append((rule.rule, method, got.status_code, "server error", "controlled response required"))
             opened = got.status_code not in (403,) and not (user["is_associate"] and got.status_code in (302, 303)
                                                            and "/me" in got.headers.get("Location", "") + "/me")
             if user["is_associate"]:

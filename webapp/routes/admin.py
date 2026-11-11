@@ -11,6 +11,7 @@ from ..access import Access, role
 from ..app import MIN_PASSWORD, USERNAME_RULE, username_problem
 from ..auth import manager_required
 from ..bulk_users import new_password
+from ..store import clean_password
 
 
 def register(app, ctx) -> None:
@@ -91,7 +92,7 @@ def register(app, ctx) -> None:
         error, made = "", []
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
-            password = request.form.get("password", "").strip()  # a pasted password with a space at the end still works
+            password = clean_password(request.form.get("password", ""))  # a pasted password with a space at the end still works
             generated = not password  # Phase AR: left blank, one is made up and shown once
             if generated:
                 password = new_password()

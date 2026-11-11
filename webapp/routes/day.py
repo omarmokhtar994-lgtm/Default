@@ -1082,7 +1082,12 @@ def register(app, ctx) -> None:
         days = _days()
         programs = ctx._my_programs(days.programs())
         program = clean_program(request.args.get("program", "")) or (programs[0] if programs else "")
-        page = days.page(program, on) if program else None
+        try:
+            page = days.page(program, on) if program else None
+        except ValueError as exc:
+            app.logger.warning("wallboard for %s on %s cannot be shown: %s", program, on, exc)  # controlled 400, and the cause is in the log
+            return render_template("error.html", code=400,
+                                   message="This day cannot be displayed because its schedule inputs are unavailable or invalid. Open the day view or ask an administrator to check the files."), 400
         board_now = None
         if page:
             v = page["view"]

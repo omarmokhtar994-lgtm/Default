@@ -213,6 +213,7 @@ class TheSpreadsheetsCannotRunWhatPeopleType(_Secured):
             query = {"program": self.alpha, "from": "2026-10-01", "to": "2026-10-31", "format": "xlsx", "date": "2026-10-14",
                      "week": "2026-10-11", "kind": list(__import__("webapp.exports", fromlist=["KINDS"]).KINDS)}
             got = client.get(url, query_string=query)
+            self.assertLess(got.status_code, 500, rule.rule)
             if got.status_code != 200 or "spreadsheet" not in got.headers.get("Content-Type", ""):
                 continue
             checked += 1

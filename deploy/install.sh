@@ -27,7 +27,8 @@ VENV="$APP_DIR/venv"
 say()  { printf '\n==> %s\n' "$*"; }
 fail() { printf '\nINSTALL STOPPED: %s\n' "$*" >&2; exit 1; }
 run()  { if [ "$DRY_RUN" = 1 ]; then printf '[dry run] %s\n' "$*"; else "$@"; fi; }
-as_scheduler() { run runuser -u scheduler -- env PYTHONPATH="$APP_DIR/package" PATH="$VENV/bin:$PATH" "$@"; }
+as_scheduler() { run runuser -u scheduler -- env PYTHONPATH="$APP_DIR/package" PATH="$VENV/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 \
+                 PYTHONPYCACHEPREFIX="$DATA_DIR/cache/pycache" XDG_CACHE_HOME="$DATA_DIR/cache" RUFF_CACHE_DIR="$DATA_DIR/cache/ruff" "$@"; }
 
 if [ "$DRY_RUN" != 1 ] && [ "$(id -u)" -ne 0 ]; then
   echo "Run it with sudo:  sudo bash deploy/install.sh"
@@ -60,6 +61,7 @@ if ! id scheduler >/dev/null 2>&1 || [ "$DRY_RUN" = 1 ]; then
   run useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin scheduler
 fi
 run install -d -o scheduler -g scheduler -m 750 "$DATA_DIR"
+run install -d -o scheduler -g scheduler -m 750 "$DATA_DIR/cache"
 run install -d -m 755 "$APP_DIR"
 
 say "Copying the package to $APP_DIR/package"
@@ -71,7 +73,8 @@ if [ -d "$APP_DIR/package" ] || [ "$DRY_RUN" = 1 ]; then
   run mv "$APP_DIR/package" "$APP_DIR/package.previous"
 fi
 run mv "$APP_DIR/package.new" "$APP_DIR/package"
-run chown -R scheduler:scheduler "$APP_DIR/package"
+# Root owns the code; the website's account reads and runs it and writes only $DATA_DIR (seal_package.sh says what it did and checks it)
+run bash "$APP_DIR/package/deploy/seal_package.sh" "$APP_DIR/package"
 
 say "Creating the Python environment with the pinned solver (a few minutes)"
 [ -x "$VENV/bin/python" ] && [ "$DRY_RUN" != 1 ] || run python3 -m venv "$VENV"

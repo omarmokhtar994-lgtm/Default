@@ -75,8 +75,9 @@ echo "Backup of the replaced files: $B"
 while IFS= read -r rel; do
   mkdir -p "$PKG/$(dirname "$rel")"; cp -p "$WORK/files/$rel" "$PKG/$rel"
 done < <("$PY" -c "import json,sys; [print(f['path']) for f in json.load(open(sys.argv[1]))['files']]" "$WORK/PATCH.json")
-if [ "$(id -u)" -eq 0 ]; then chown -R scheduler:scheduler "$PKG" 2>/dev/null || true; fi
-if ! "$PY" -m py_compile $(cd "$PKG" && ls webapp/*.py | sed "s|^|$PKG/|") 2>/dev/null; then
+# The code stays root-owned and read-only to the website's account (seal_package.sh); the compile check writes its copies to the work folder, not the package
+if [ "$(id -u)" -eq 0 ] && [ -f "$PKG/deploy/seal_package.sh" ]; then bash "$PKG/deploy/seal_package.sh" "$PKG" || { put_back "$B"; fail "the patched package could not be sealed: the old files are back."; }; fi
+if ! PYTHONPYCACHEPREFIX="$WORK/pyc" "$PY" -m py_compile $(cd "$PKG" && ls webapp/*.py | sed "s|^|$PKG/|") 2>/dev/null; then
   put_back "$B"; fail "a patched file does not compile: the old files are back."
 fi
 if [ "${PATCH_NO_SERVICE:-0}" != "1" ] && grep -q '"deploy/requirements.txt"' "$WORK/PATCH.json"; then

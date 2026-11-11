@@ -2,6 +2,7 @@
 """Website routes: a week's channels."""
 from __future__ import annotations
 
+import functools
 import io
 import json
 import tempfile
@@ -28,6 +29,22 @@ from .. import app as A  # the clock and a few seams are read through the app mo
 
 def register(app, ctx) -> None:
     """Add the a week's channels routes to ``app``; ``ctx`` holds the helpers the areas share."""
+    def _schedule_file_errors(view):
+        """A missing schedule file is an unavailable resource, not an uncaught server error."""
+        @functools.wraps(view)
+        def wrapped(*args, **kwargs):
+            try:
+                return view(*args, **kwargs)
+            except FileNotFoundError as exc:
+                # a controlled 404 for the person, but never a silent one: the cause (which file, which route) is in the log, below error level
+                # because a missing schedule file is an unavailable resource, not a fault of the website
+                app.logger.warning("schedule file missing on %s %s: %s", request.method, request.path, exc)
+                message = "Required schedule files are unavailable. Ask an administrator to restore or regenerate the schedule."
+                if request.method == "POST":
+                    return jsonify(error=message), 404
+                abort(404, description=message)
+        return wrapped
+
     # ------------------------------------------------------------- a week's channels (Phase V)
     @app.route("/schedules/<int:schedule_id>/channels", methods=["GET", "POST"])
     @login_required
@@ -180,6 +197,7 @@ def register(app, ctx) -> None:
 
     @app.route("/schedules/<int:schedule_id>/check", methods=["POST"])
     @login_required
+    @_schedule_file_errors
     def schedule_check(schedule_id: int):  # type: ignore[no-untyped-def]
         ctx._version_or_404(schedule_id)
         try:
@@ -193,6 +211,7 @@ def register(app, ctx) -> None:
 
     @app.route("/schedules/<int:schedule_id>/change", methods=["POST"])
     @login_required
+    @_schedule_file_errors
     def schedule_change(schedule_id: int):  # type: ignore[no-untyped-def]
         row = ctx._version_or_404(schedule_id)
         name, day, value = (request.form.get(k, "") for k in ("associate", "day", "value"))
@@ -208,6 +227,7 @@ def register(app, ctx) -> None:
 
     @app.route("/schedules/<int:schedule_id>/swap-check", methods=["POST"])
     @login_required
+    @_schedule_file_errors
     def schedule_swap_check(schedule_id: int):  # type: ignore[no-untyped-def]
         ctx._version_or_404(schedule_id)
         try:
@@ -219,6 +239,7 @@ def register(app, ctx) -> None:
 
     @app.route("/schedules/<int:schedule_id>/swap", methods=["POST"])
     @login_required
+    @_schedule_file_errors
     def schedule_swap(schedule_id: int):  # type: ignore[no-untyped-def]
         row = ctx._version_or_404(schedule_id)
         first, second = request.form.get("first", ""), request.form.get("second", "")
@@ -244,6 +265,7 @@ def register(app, ctx) -> None:
 
     @app.route("/schedules/<int:schedule_id>/download")
     @login_required
+    @_schedule_file_errors
     def schedule_download(schedule_id: int):  # type: ignore[no-untyped-def]
         row = ctx._version_or_404(schedule_id)
         book = ctx._book()

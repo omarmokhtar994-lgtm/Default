@@ -34,7 +34,7 @@ def check_csrf() -> None:
         return
     sent = request.form.get("csrf_token", "")
     expected = session.get("csrf", "")
-    if not expected or not hmac.compare_digest(sent, expected):
+    if not expected or not sent.isascii() or not hmac.compare_digest(sent, expected):
         abort(400, description="This form expired or did not come from this site. Reload the page and try again.")
 
 

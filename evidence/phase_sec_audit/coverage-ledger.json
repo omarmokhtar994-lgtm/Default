@@ -50,14 +50,142 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
+  "status": "covered",
+  "agent_id": "h19",
+  "reviewed_paths": [
+   "webapp/access.py",
+   "webapp/adherence.py",
+   "webapp/analytics.py",
+   "webapp/app.py",
+   "webapp/attendance.py",
+   "webapp/outcome.py",
+   "webapp/outlook.py",
+   "webapp/permissions.py",
+   "webapp/program_page.py",
+   "webapp/results.py",
+   "webapp/routes/analytics.py",
+   "webapp/routes/day.py",
+   "webapp/routes/runs.py",
+   "webapp/store.py",
+   "webapp/week.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h19",
+    "reviewed_paths": [
+     "webapp/routes/analytics.py",
+     "webapp/app.py",
+     "webapp/access.py",
+     "webapp/permissions.py",
+     "webapp/routes/runs.py",
+     "webapp/store.py",
+     "webapp/analytics.py"
+    ],
+    "invariant": "Analytics and Week/Programs handlers return only data of openable programs and runs",
+    "method": "source",
+    "result": "Held: before_request checks can_open on request.values['program'] or view_args['name']; every handler re-checks (week_target, day_shrinkage_map, week_hours_needed); /runs/<id>/week via _run_or_404; history from _visible(list_runs()); merged view units filtered by can_open and the session pick intersected with them. Only gap: known uploader-access lead (lists former programs' own uploads).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h19",
+    "reviewed_paths": [
+     "webapp/routes/analytics.py",
+     "webapp/attendance.py",
+     "webapp/routes/day.py",
+     "webapp/store.py"
+    ],
+    "invariant": "Version and week ids on /week and hours-needed bound to the checked program",
+    "method": "source",
+    "result": "Held: _week_version 404 unless the id is in list_schedules(program, week_start); DayBook._build_page re-checks with list_schedules(program, covering=date); week_target and day_shrinkage_map write only whitelisted values keyed by the checked program.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h19",
+    "reviewed_paths": [
+     "webapp/results.py",
+     "webapp/outcome.py",
+     "webapp/adherence.py",
+     "webapp/analytics.py",
+     "webapp/outlook.py",
+     "webapp/program_page.py",
+     "webapp/week.py"
+    ],
+    "invariant": "Compute modules are pure transforms; bounds, division by zero, stored-text rendering",
+    "method": "source",
+    "result": "Held: no program/user argument (scoping rests on the route layer); divisions guarded; weeks clamped 1-520; text returned as plain strings (templates autoescape); results._case_dir and _load read only inside the run's own results dir with fixed glob patterns.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h19",
+  "hardening_notes": [
+   "routes/analytics.py _all_runs() calls store.list_runs(limit=100000) and program_weeks re-parses every run's metrics JSON (per-interval rows) two or three times per request for any user with 'analysis' or 'schedules_view'; cost grows with run history and there is no cache. Cache per request and filter by program in SQL (same-principal availability).",
+   "week_page/_merged_week call _all_runs() again per render (history is not reused in _version_week), doubling that cost.",
+   "week_hours_needed builds the xlsx title from the raw program name (file name is sanitised); program names are admin-set, so formula injection needs an admin; apply the shared neutraliser for consistency (needed.workbook not read in depth).",
+   "week_target: int(base) of rta_default would raise ValueError (500) if a stored default were non-numeric; validated on write, no outside input reaches it.",
+   "/programs/<path:name> keys on the raw path text while other routes use clean_program; a name with doubled or leading spaces fails can_open (403): fail-closed."
+  ]
+ },
+ {
+  "coverage_id": "Approved-request%20writes%20in%20the%20day%20layer::webapp%2Fattendance.py%23move_break%2C%20add_activity%20as%20called%20by%20decide::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "Approved-request writes in the day layer",
+   "boundary": "webapp/attendance.py#move_break, add_activity as called by decide",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "Approved-request writes in the day layer",
+  "boundary": "webapp/attendance.py#move_break, add_activity as called by decide",
+  "subsystem": "all in-scope subsystems",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/attendance.py",
+   "webapp/change_requests.py",
+   "webapp/routes/requests.py",
+   "webapp/routes/day.py",
+   "webapp/app.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is primary for this unit"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 5,
   "status": "deferred",
   "agent_id": null,
   "reviewed_paths": [],
   "local_checks": [],
   "result_fingerprints": [],
   "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
-  ]
+   "The wave-4 hunter was stopped by an API usage limit (HTTP 429) before it returned a result; the unit is unreviewed"
+  ],
+  "hunter_label": "h24"
  },
  {
   "coverage_id": "DayBook%20page%20builders%20and%20break%20rule%20engines::webapp%2Fattendance.py%23_build_page::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Business%20logic",
@@ -109,13 +237,88 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h18",
+  "reviewed_paths": [
+   "webapp/attendance.py",
+   "webapp/break_plan.py",
+   "webapp/bulk_breaks.py",
+   "webapp/day.py",
+   "webapp/routes/day.py",
+   "webapp/week.py",
+   "webapp/window_tools.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h18",
+    "reviewed_paths": [
+     "webapp/attendance.py",
+     "webapp/window_tools.py",
+     "webapp/routes/day.py"
+    ],
+    "invariant": "A window start of +/-9999 minutes cannot force unbounded page rebuilds or wrap into a wrong window",
+    "method": "source",
+    "result": "Held: window_page loops over at most 2 extra day pages; DayBook.page caches plain days; negative starts symmetric; rebase/WindowHold use floor division. Cost bounded.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h18",
+    "reviewed_paths": [
+     "webapp/attendance.py",
+     "webapp/routes/day.py"
+    ],
+    "invariant": "Uncapped move and name lists do not give unbounded or quadratic cost",
+    "method": "source",
+    "result": "move_break does not rebuild a page (_shift, plan_for, list_actual_breaks, check_break); apply_rescue is one pass; apply_replan re-passes only while a move is kept. Only bound on move count is the framework form-part limit (no MAX_FORM_PARTS in app.py; MAX_CONTENT_LENGTH 25 MB). Hardening note only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h18",
+    "reviewed_paths": [
+     "webapp/attendance.py",
+     "webapp/day.py",
+     "webapp/break_plan.py",
+     "webapp/bulk_breaks.py"
+    ],
+    "invariant": "Break checks and plans cannot silently produce a wrong plan from negative, wrapped or overnight minutes",
+    "method": "source",
+    "result": "Held: _clock, overnight +1440, check_break enforces 5-minute step, shift bounds, overlap including cancelled breaks; plain_hm wraps mod 1440 but check_break re-validates; bulk_breaks._one checks step, started, bounds, overlap; DST shifts from the schedule's own zone.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h18",
+    "reviewed_paths": [
+     "webapp/routes/day.py",
+     "webapp/attendance.py",
+     "webapp/bulk_breaks.py"
+    ],
+    "invariant": "User text reaching rendered output or stored rows is validated or escaped",
+    "method": "source",
+    "result": "Held: names matched to roster lanes; why whitespace-normalised, capped at 200, never posted; which/unknown names only in flash/preview (autoescaped); _move_item parses ints and a date through _date/in_range.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h18",
+    "reviewed_paths": [
+     "webapp/week.py",
+     "webapp/attendance.py"
+    ],
+    "invariant": "week.py arithmetic cannot be driven by request input",
+    "method": "source",
+    "result": "Held: compact/in_zone/view consume validator interval rows held with a run; _step guards 1440 % step.",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h18",
+  "hardening_notes": [
+   "Variant of the back-limit lead, different entry: POST /day/bulk/apply and /day/rescue/apply accept a form 'start' of -9999..9999 (routes/day.py _form_start); window moves are kept on each shift's own date, up to about 7 days from the posted 'date' (attendance.py _dated/dates_of, apply_bulk, apply_rescue). The back-limit in app.py:386 reads only form 'date' and 'first', so a Planner (limit 1 day) could change breaks up to roughly 7 days back. Fix together with the back-limit lead: check _still_editable on every date a move or change touches inside apply_replan, apply_rescue and apply_bulk.",
+   "apply_replan has no cap on moves or passes; the only limit is the framework default form-part limit (no MAX_FORM_PARTS in app.py). Cap moves (roster size x breaks per person) and add a deadline. Same-principal availability.",
+   "DayBook._lock keys one RLock per (program, date) and the date for moves comes from the form (any in_range date): with the unbounded _locks dict this is a growth point. The action lock covers only the posted date while move_break writes rows on other dates, so concurrent window changes on different anchors can interleave on the same shift date.",
+   "_bulk_found/_dated and attendance.plain_hm wrap minutes modulo 1440, so a crafted minute such as -100 or 1500 round-trips to another valid clock time before check_break; safe only because check_break re-validates. Add an explicit range check on _move_item minutes (e.g. -1440 < minute < 2880).",
+   "/day GET with who=... repeated puts an uncapped list of names into the preview 'skipped' list; response size grows with the query string (waitress header cap about 256 KB). Same principal; cap names at the roster size.",
+   "_form_start's MINUTE regex ends in $, which accepts a trailing newline; int() tolerates it, harmless today. Use re.fullmatch."
   ]
  },
  {
@@ -476,13 +679,88 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h16",
+  "reviewed_paths": [
+   "webapp/app.py",
+   "webapp/approvals.py",
+   "webapp/change_requests.py",
+   "webapp/leave.py",
+   "webapp/permissions.py",
+   "webapp/routes/break_changes.py",
+   "webapp/routes/my_week.py",
+   "webapp/routes/requests.py",
+   "webapp/runs.py",
+   "webapp/schedules.py",
+   "webapp/store.py",
+   "webapp/swaps.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h16",
+    "reviewed_paths": [
+     "webapp/leave.py",
+     "webapp/approvals.py",
+     "webapp/permissions.py",
+     "webapp/routes/break_changes.py",
+     "webapp/store.py",
+     "webapp/app.py"
+    ],
+    "invariant": "Leave approval re-checks approver role, program, self-approval and status before writing a new in-use version",
+    "method": "source",
+    "result": "Held: request_leave_decide calls can_open(row['program']); LeaveBook._decide re-reads status in WAITING; TM step needs may_approve_for; RTA step needs approve_rta and user != tm_id; store.move_leave is compare-and-set; roles mutually exclusive so an asker cannot approve their own request. Skipping _may_set_in_use is gated by the admin-configurable approve_rta role (permissions.py:29, by design).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h16",
+    "reviewed_paths": [
+     "webapp/swaps.py",
+     "webapp/approvals.py",
+     "webapp/routes/my_week.py",
+     "webapp/store.py",
+     "webapp/schedules.py"
+    ],
+    "invariant": "Swap approval and apply limited to authorised, program-scoped, single-shot approvers re-validated against current schedule",
+    "method": "source",
+    "result": "Held apart from known swaps.answer lead: request_swap_decide checks can_open; _decide requires waiting_tm and may_approve_for per side; compare-and-set transitions; _apply/_apply_week re-read roster cells and re-run check(); set_in_use under run lock (intended for an approved change).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h16",
+    "reviewed_paths": [
+     "webapp/change_requests.py",
+     "webapp/routes/break_changes.py",
+     "webapp/routes/requests.py"
+    ],
+    "invariant": "Break and coaching request approval applies a change only for an authorised RTA on an openable program against current state",
+    "method": "source",
+    "result": "Held for authorisation: request_change_decide needs non-associate, rta_change and can_open(row['program']); decide() re-runs stale_note, time-passed and dry-run checks. Status update has no compare-and-set (known hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h16",
+    "reviewed_paths": [
+     "webapp/leave.py",
+     "webapp/runs.py",
+     "webapp/app.py",
+     "webapp/store.py"
+    ],
+    "invariant": "Crash recovery of 'applying' and the on_kept hook cannot cross programs or apply unapproved leave",
+    "method": "source",
+    "result": "Held: leave.recover() at start-up returns 'applying' to waiting_rta; re-approval idempotent; apply_waiting filters by the run's program and status 'approved'; program '' matches no rows. Swaps have no recover() (known).",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h16",
+  "hardening_notes": [
+   "leave._apply, swaps._apply and swaps._apply_week read the in-use version outside the run lock, then change_many/swap_day fork from that older version and set_in_use makes the fork current; a newer planner edit in the gap is silently dropped from the in-use schedule (stays as a kept version). Take the version id inside one run-locked operation or compare the base id with the current in-use id and refuse ('schedule changed, approve again'). Same-role race.",
+   "Neither leave._decide/_apply nor swaps._apply requires the day to be today or later at approval time (ask()/offer() check only at request time): a request approved late rewrites past, already-worked days of a kept week through approve_rta or approve_tm, without the RTA back-limit that applies to the day edit routes (related to the back-limit lead). Refuse or list past days as skipped.",
+   "When no version is in_use, days.version falls back to the tool's own pick; an approved leave or swap forks that pick and set_in_use makes it the in-use version, implicitly promoting a schedule choice nobody made. Refuse or say so in the outcome text.",
+   "leave.decide's RTA step needs approve_rta only, not also schedules_change, though the apply writes a schedule version and sets it in use (documented in the CATALOGUE text): a team manager given approve_rta gains schedule-write through leave approval. Configuration note.",
+   "leave._apply and swap apply paths are not atomic across weeks: a failure after the first week leaves earlier weeks changed while the request returns to waiting; leave retry is idempotent, a swap retry fails the cell check.",
+   "change_requests.cancel and decide use unconditional update_change_request: cancel after a concurrent approve can show 'cancelled' for an applied change (known)."
   ]
  },
  {
@@ -642,13 +920,112 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h20",
+  "reviewed_paths": [
+   "webapp/access.py",
+   "webapp/app.py",
+   "webapp/clock.py",
+   "webapp/eta.py",
+   "webapp/insights_page.py",
+   "webapp/merge.py",
+   "webapp/merged_day.py",
+   "webapp/paging.py",
+   "webapp/program_page.py",
+   "webapp/routes/analytics.py",
+   "webapp/routes/day.py",
+   "webapp/routes/exports.py",
+   "webapp/routes/home.py",
+   "webapp/routes/runs.py",
+   "webapp/shrink_page.py",
+   "webapp/templates/dashboard.html"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/program_page.py",
+     "webapp/routes/analytics.py",
+     "webapp/app.py",
+     "webapp/access.py"
+    ],
+    "invariant": "Program page builder and callers show only weeks of an openable program",
+    "method": "source",
+    "result": "Held: program_page.py is pure formatting; /programs/<name> checked in before_request (view_args name -> can_open); history from ctx._visible; weeks_to_show 1..520 else 12. Residual: known uploader-keeps-run family.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/insights_page.py",
+     "webapp/shrink_page.py",
+     "webapp/routes/exports.py",
+     "webapp/app.py"
+    ],
+    "invariant": "Incidents/shrinkage page builders cannot be fed facts of unopenable programs",
+    "method": "source",
+    "result": "Held: builders lay out facts handed to them; routes/exports.py re-checks every requested key with can_open before collect_insights; 'who' selects within scoped facts; parameters whitelisted or clamped.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/merge.py",
+     "webapp/merged_day.py",
+     "webapp/routes/analytics.py",
+     "webapp/routes/day.py",
+     "webapp/app.py"
+    ],
+    "invariant": "Merged-LOB logic cannot include, display or write to an unopenable unit",
+    "method": "source",
+    "result": "Held: _merge_units filters by can_open and requires the opened program in the list; _merge_choice intersects with that list; _route_to_lob swaps only inside it. POST query-vs-form mismatch is the known lead.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/paging.py",
+     "webapp/app.py",
+     "webapp/routes/home.py"
+    ],
+    "invariant": "Paging parameters bounded",
+    "method": "source",
+    "result": "Held: page_of clamps 1..pages, size constant 20, type=int, links via url_for; paging after visibility filtering.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/eta.py",
+     "webapp/routes/home.py",
+     "webapp/routes/runs.py",
+     "webapp/templates/dashboard.html"
+    ],
+    "invariant": "Queue estimates do not expose another program's run details",
+    "method": "source",
+    "result": "Held with a note: queue_plan covers every run by design; other programs' runs show only as 'A run/workbook for another program' with counts and wait times; per-run eta only after _run_or_404.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h20",
+    "reviewed_paths": [
+     "webapp/clock.py",
+     "webapp/app.py",
+     "webapp/routes/day.py"
+    ],
+    "invariant": "clock.py zone/DST handling cannot be steered to widen an authorisation window",
+    "method": "source",
+    "result": "Held: request zone whitelisted in app.py; helpers use pick_zone; offset takes noon; rta_shift/converted refuse across DST changes. Back-limit logic itself is the known lead.",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h20",
+  "hardening_notes": [
+   "eta.queue_plan and the home dashboard show every user queue depth and start/finish estimates across all programs (no names or program), documented as intended in home.py; restrict to the user's own runs if the Phase AR rule 'nothing of another program is visible' should cover it.",
+   "clock.zone_gap_words and clock.offset call ZoneInfo(zone) on the raw argument while other helpers use pick_zone; callers pass whitelisted zones today; use pick_zone inside them so a future caller cannot raise ZoneInfoNotFoundError or a 500.",
+   "routes/analytics.py program() and programs(): history comes from ctx._visible, which includes runs the user uploaded in programs they have lost, so a former member's own upload weeks can show on /programs (same root cause as the known uploader-access lead)."
   ]
  },
  {
@@ -955,6 +1332,69 @@
   }
  },
  {
+  "coverage_id": "Remaining%20server-rendered%20templates%20and%20static%20assets::webapp%2Ftemplates%23href%2Fsrc%2Ftojson%20contexts::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "Remaining server-rendered templates and static assets",
+   "boundary": "webapp/templates#href/src/tojson contexts",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "Remaining server-rendered templates and static assets",
+  "boundary": "webapp/templates#href/src/tojson contexts",
+  "subsystem": "all in-scope subsystems",
+  "attack_class": "Injection",
+  "starting_paths": [
+   "webapp/templates",
+   "webapp/static/app.css",
+   "webapp/static/icons.css",
+   "webapp/static/mark.svg"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline",
+   "CLIENT-SIDE.md#Universal moves",
+   "CLIENT-SIDE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is primary for this unit"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is primary for this unit"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 5,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "The wave-4 hunter was stopped by an API usage limit (HTTP 429) before it returned a result; the unit is unreviewed"
+  ],
+  "hunter_label": "h23"
+ },
+ {
   "coverage_id": "Run%20lifecycle%20and%20admin::webapp%2Fruns.py%23queue%2C%20recover%2C%20run_admin.move_run::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Business%20logic",
   "canonical_refs": {
    "surface": "Run lifecycle and admin",
@@ -1189,13 +1629,67 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h17",
+  "reviewed_paths": [
+   "webapp/app.py",
+   "webapp/gate.py",
+   "webapp/permissions.py",
+   "webapp/routes/exports.py",
+   "webapp/routes/runs.py",
+   "webapp/runs.py",
+   "webapp/schedules.py",
+   "webapp/versions.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h17",
+    "reviewed_paths": [
+     "webapp/routes/exports.py",
+     "webapp/routes/runs.py",
+     "webapp/app.py",
+     "webapp/permissions.py",
+     "webapp/runs.py"
+    ],
+    "invariant": "POST /runs/<id>/start: runs permission, visible source run, new run inherits only the source's program/week/workbook/validated options",
+    "method": "source",
+    "result": "Held: mapped to 'runs' (permissions.py:48); _run_or_404 regex + exact lookup + _can_see_run; mode in MODES, source not IN_FLIGHT; start_from copies the source's own input to _incoming under a random name and submits with the source's program/week; new run owned by the starter. Access after program removal is the known candidate; double POST queues two runs (same principal).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h17",
+    "reviewed_paths": [
+     "webapp/runs.py",
+     "webapp/versions.py",
+     "webapp/schedules.py"
+    ],
+    "invariant": "Validator and runner options allow-listed before reaching argv; list argv everywhere",
+    "method": "source",
+    "result": "parse_options accepts only OPTIONS values; run_options re-filters on read; runner_command adds only named flags. schedules._options returns the raw stored dict so versions.validate passes options['language_window'] unfiltered, but as one list element with no shell and values only from parse_options: defence-in-depth gap only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h17",
+    "reviewed_paths": [
+     "webapp/gate.py",
+     "webapp/runs.py"
+    ],
+    "invariant": "gate.ensure runs only run_tests.sh from the worker with a fixed command; unprivileged user cannot influence it beyond queue timing",
+    "method": "source",
+    "result": "Held: call sites RunQueue._execute and manage.py check-package; gate_cmd from config or ['bash','run_tests.sh']; cwd sealed package_root; stamp keyed by sha256(MANIFEST.json) under DATA_DIR/runs/_gate (cannot match RUN_ID regex); module lock; failure never cached. Forging the stamp needs DATA_DIR write (known item).",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h17",
+  "hardening_notes": [
+   "schedules.py:147-153 _options returns the stored options unfiltered while runs.run_options filters to the OPTIONS allow-list; versions.validate puts options['language_window'] into validator argv. Safe today (list argv, DB values only from parse_options); reuse run_options so the allow-list holds at the argv boundary.",
+   "runs.py:338-351 start_from does not copy the source run's time zone; a run started from a check falls back to the default zone and may show the schedule in the wrong zone (correctness, not security).",
+   "gate.py:63-67 on TimeoutExpired subprocess.run kills only the direct bash child, so run_tests.sh grandchildren can keep running after the 3600 s timeout; start the gate in its own session and kill the process group like RunQueue.",
+   "gate.py ensure: a failed gate is re-run (up to 1 h) by the next queued run; with a persistently failing gate and no per-user queue cap a 'runs' user can keep the single worker busy. Consider a back-off keyed by manifest hash.",
+   "routes/exports.py:324-328 run_start has no atomic claim: the IN_FLIGHT check is read before start_from, so a double submit queues two runs. Same principal.",
+   "gate.py:79 stamp written with write_text, not temp-and-rename; a crash mid-write gives invalid JSON which passed_stamp treats as no stamp (fail closed)."
   ]
  },
  {
@@ -1409,13 +1903,73 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h22",
+  "reviewed_paths": [
+   "tests_staged/GATE_MINIMUMS.json",
+   "tests_staged/test_rc9_2_57_web_workbooks.py",
+   "tools/build_web_workbooks.py",
+   "webapp/app.py",
+   "webapp/routes/exports.py",
+   "webapp/tests/test_av_upload_guard.py",
+   "webapp/upload_guard.py",
+   "webapp/workbooks/Scheduler_Input_Blank.xlsx",
+   "webapp/workbooks/Scheduler_Input_Example.xlsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h22",
+    "reviewed_paths": [
+     "webapp/workbooks/Scheduler_Input_Blank.xlsx",
+     "webapp/workbooks/Scheduler_Input_Example.xlsx"
+    ],
+    "invariant": "Shipped templates carry no macros, external links, embedded objects or URLs in the zip structure",
+    "method": "source",
+    "result": "Sizes 67050 and 67184 bytes, git-tracked. Grep -a over the raw zips (member names stored uncompressed) found 0 hits for vbaProject, externalLink, oleObject, activeX; no TargetMode=External or http(s) Target strings visible. Members: docProps, workbook/styles/theme, 28 worksheets, three comments parts with VML drawings. NOT verified: compressed sheet/rels/sharedStrings content; the member listing was cut at 40 lines.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h22",
+    "reviewed_paths": [
+     "webapp/routes/exports.py",
+     "webapp/app.py"
+    ],
+    "invariant": "/workbooks/<name> serves only the two fixed files",
+    "method": "source",
+    "result": "login_required; 404 unless name in WORKBOOKS (app.py:134); send_file joins the fixed folder with the allow-listed name. No traversal.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h22",
+    "reviewed_paths": [
+     "tools/build_web_workbooks.py",
+     "tests_staged/test_rc9_2_57_web_workbooks.py"
+    ],
+    "invariant": "Example workbook uses made-up names",
+    "method": "source",
+    "result": "Builder docstring says the Example is the synthetic SYNTH_M2 workbook with 'Synth Agent' names; test_example_names_are_made_up exists. Names follow 'Synth Agent', not 'Associate NN'. Actual cell content not inspectable; test body not read.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h22",
+    "reviewed_paths": [
+     "webapp/upload_guard.py",
+     "webapp/tests/test_av_upload_guard.py",
+     "tests_staged/GATE_MINIMUMS.json"
+    ],
+    "invariant": "Build and tests check the templates for integrity",
+    "method": "source",
+    "result": "Templates regenerated by tools/build_web_workbooks.py; test_the_templates_and_real_inputs_pass runs upload_guard.look() on every webapp/workbooks/*.xlsx; no pinned hash or MANIFEST entry for the two xlsx found. Tests not executed.",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h22",
+  "hardening_notes": [
+   "No pinned checksum for webapp/workbooks/*.xlsx was found; a sha256 pin in a test would detect byte changes the upload guard misses.",
+   "Example workbook names are 'Synth Agent' style per the builder docstring, not the 'Associate NN' convention in CLAUDE.md; the intent (made-up names) appears met but cell content was not inspectable.",
+   "The compressed content of the two template workbooks (sheets, rels, sharedStrings) could not be inspected in a source-only run; an owner check with a spreadsheet tool for external links, macros and real names is still outstanding."
   ]
  },
  {
@@ -1685,13 +2239,84 @@
   "prior_status": "none",
   "attempts": [],
   "wave": 3,
-  "status": "deferred",
-  "agent_id": null,
-  "reviewed_paths": [],
-  "local_checks": [],
+  "status": "covered",
+  "agent_id": "h21",
+  "reviewed_paths": [
+   "webapp/break_rules_cli.py",
+   "webapp/forecast_methods.py",
+   "webapp/routes/volumes.py",
+   "webapp/routes/week_breaks.py",
+   "webapp/schedules.py",
+   "webapp/volumes.py",
+   "webapp/volumes_formulas.py",
+   "webapp/volumes_grain.py",
+   "webapp/volumes_zone.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h21",
+    "reviewed_paths": [
+     "webapp/volumes_formulas.py",
+     "webapp/routes/volumes.py",
+     "webapp/volumes.py"
+    ],
+    "invariant": "Workbook cells from volumes_formulas carry no user free text Excel could evaluate",
+    "method": "source",
+    "result": "Every cell is a constant label, validated number or fixed formula; inputs range-checked and finite (volumes.py:141, 235); file-name tag reduced to [A-Za-z0-9_]; Read me formula text forced to data_type 's'. No injection path.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h21",
+    "reviewed_paths": [
+     "webapp/volumes_zone.py",
+     "webapp/volumes_grain.py",
+     "webapp/routes/volumes.py",
+     "webapp/volumes.py"
+    ],
+    "invariant": "Zone, DST and regrid handling cannot mis-assign data across days or programs",
+    "method": "source",
+    "result": "Zones checked against a fixed list before ZoneInfo; convert_rows refuses skipped-hour volume, reads repeated hour as first with a note; rotate_grid/stitch wrap inside the week with grid shape validated; regrid/share require integer multiples; non-finite floats filtered at parse (volumes_io.py:132).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h21",
+    "reviewed_paths": [
+     "webapp/forecast_methods.py"
+    ],
+    "invariant": "Forecast methods read only weeks before the target and stay bounded",
+    "method": "source",
+    "result": "_before filters strictly earlier weeks; loops bounded by series length x 5 methods x 8 test weeks; divisions guarded; no regex or text parse.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h21",
+    "reviewed_paths": [
+     "webapp/break_rules_cli.py",
+     "webapp/schedules.py"
+    ],
+    "invariant": "break_rules_cli runs with fixed argv, fixed engine path and a timeout",
+    "method": "source",
+    "result": "subprocess.run list argv, input_path(run_id), fixed engine path, cwd package root, timeout=120; errors become a ValueError whose last stderr line is flashed to the planner (same principal). Cache write non-atomic (known).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h21",
+    "reviewed_paths": [
+     "webapp/routes/week_breaks.py"
+    ],
+    "invariant": "Posted break-grid fields bounded and limited to the version's own associates",
+    "method": "source",
+    "result": "Rows capped at 2000; names looked up in the version's own shifts; anchored HH:MM regex; day whitelisted; reason cut to 200 chars (sink known lead); program check via _version_or_404.",
+    "artifact": null
+   }
+  ],
   "result_fingerprints": [],
-  "unresolved": [
-   "budget_cannot_reserve_critics_and_validation: accepted by the wave-2 critic; the 40-agent budget could not fund another hunter wave plus the final critic and verifiers"
+  "unresolved": [],
+  "hunter_label": "h21",
+  "hardening_notes": [
+   "schedules.break_rules flashes the last stderr line of the break_rules_cli subprocess (engine parser traceback text, may include a server file path) to the planner; show a fixed message and keep detail in the server log.",
+   "routes/week_breaks.py plan_breaks: typed-grid rows capped at 2000 but each evaluates slots_for per name; harmless at this size, same principal.",
+   "volumes_zone.convert_rows trusts each row's day string is an ISO date; rows come from the strict parser today; keep that invariant for any new caller."
   ]
  },
  {

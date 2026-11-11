@@ -13,11 +13,10 @@
  "companions": [],
  "prior_runs": [],
  "shared_file_owners": "parent",
- "run_status": "incomplete",
- "agents_spent": 44,
- "coverage": "partial",
+ "run_status": "complete",
+ "agents_spent": 45,
+ "coverage": "source-only, all in-scope Python, templates, static files and deploy scripts reviewed; no lead confirmed by execution",
  "profile_note": "Started as quick; changed to standard for wave 2 at the owner's request (second wave over deferred units)",
- "waves": 3,
- "budget_note": "Raised from 40 to 65 by the parent at the owner's request ('why can't you use more than 6?') to fund wave 3 over the 7 deferred units; the 40 was the parent's own initial estimate, not a system limit",
- "incomplete_reason": "api_usage_limit_during_wave_4"
+ "waves": 4,
+ "budget_note": "Raised from 40 to 65 by the parent at the owner's request ('why can't you use more than 6?') to fund wave 3 over the 7 deferred units; the 40 was the parent's own initial estimate, not a system limit"
 }

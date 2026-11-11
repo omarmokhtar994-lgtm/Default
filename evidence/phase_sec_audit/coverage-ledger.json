@@ -1,0 +1,2173 @@
+[
+ {
+  "coverage_id": "Group-post%20notifier%20send%20path::webapp%2Fnotify.py%23send_action%2C%20store.get_day_action::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "Group-post notifier send path",
+   "boundary": "webapp/notify.py#send_action, store.get_day_action",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "Group-post notifier send path",
+  "boundary": "webapp/notify.py#send_action, store.get_day_action",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/notify.py",
+   "webapp/routes/day.py",
+   "webapp/store.py",
+   "webapp/handover.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "Operator%20tooling%20shipped%20in%20the%20package::webapp%2Fmanage.py%23CLI%20actions::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Chained%20vulnerabilities%20and%20trust%20boundaries",
+  "canonical_refs": {
+   "surface": "Operator tooling shipped in the package",
+   "boundary": "webapp/manage.py#CLI actions",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries"
+  },
+  "surface": "Operator tooling shipped in the package",
+  "boundary": "webapp/manage.py#CLI actions",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Chained vulnerabilities and trust boundaries",
+  "starting_paths": [
+   "webapp/manage.py",
+   "webapp/break_rules_cli.py",
+   "webapp/workbooks"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "Per-user%20and%20per-run%20downloads::webapp%2Froutes%2Fpeople_file.py%23People.xlsx%2C%20Temporary_passwords.xlsx::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "Per-user and per-run downloads",
+   "boundary": "webapp/routes/people_file.py#People.xlsx, Temporary_passwords.xlsx",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "Per-user and per-run downloads",
+  "boundary": "webapp/routes/people_file.py#People.xlsx, Temporary_passwords.xlsx",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Feature abuse and data leakage",
+  "starting_paths": [
+   "webapp/routes/channel_needs.py",
+   "webapp/routes/people_file.py",
+   "webapp/bulk_users.py",
+   "webapp/routes/runs.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "RTA%20day%20write%20layer::webapp%2Fattendance.py%23DayBook%20per-id%20operations::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "RTA day write layer",
+   "boundary": "webapp/attendance.py#DayBook per-id operations",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "RTA day write layer",
+  "boundary": "webapp/attendance.py#DayBook per-id operations",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/attendance.py",
+   "webapp/day.py",
+   "webapp/routes/day.py",
+   "webapp/store.py",
+   "webapp/merged_day.py",
+   "webapp/channel_day.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "Run%20lifecycle%20and%20admin::webapp%2Fruns.py%23queue%2C%20recover%2C%20run_admin.move_run::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "Run lifecycle and admin",
+   "boundary": "webapp/runs.py#queue, recover, run_admin.move_run",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "Run lifecycle and admin",
+  "boundary": "webapp/runs.py#queue, recover, run_admin.move_run",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Business logic",
+  "starting_paths": [
+   "webapp/runs.py",
+   "webapp/run_admin.py",
+   "webapp/routes/runs.py",
+   "webapp/routes/schedule_delete.py",
+   "webapp/programs.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "Schedule%20versions%20and%20schedules::webapp%2Fversions.py%23version%20ids%2C%20restore%2C%20delete::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "Schedule versions and schedules",
+   "boundary": "webapp/versions.py#version ids, restore, delete",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "Schedule versions and schedules",
+  "boundary": "webapp/versions.py#version ids, restore, delete",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/versions.py",
+   "webapp/schedules.py",
+   "webapp/routes/schedule_versions.py",
+   "webapp/routes/week_breaks.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "Unmapped%20feature%20modules::webapp%2Froutes%2Fhome.py%23page%20routes%20and%20helper%20modules::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "Unmapped feature modules",
+   "boundary": "webapp/routes/home.py#page routes and helper modules",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "Unmapped feature modules",
+  "boundary": "webapp/routes/home.py#page routes and helper modules",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/routes/home.py",
+   "webapp/live.py",
+   "webapp/rescue.py",
+   "webapp/channel_page.py",
+   "webapp/program_page.py",
+   "webapp/shrink_page.py",
+   "webapp/forecast.py",
+   "webapp/bulk_breaks.py",
+   "webapp/gate.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "deferred unit: companion selection is made when the unit is assigned in a later run"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "deferred",
+  "agent_id": null,
+  "reviewed_paths": [],
+  "local_checks": [],
+  "result_fingerprints": [],
+  "unresolved": [
+   "quick_profile_final_critic: accepted by the final coverage critic after the single hunter wave; not assigned in the quick profile"
+  ]
+ },
+ {
+  "coverage_id": "deploy%20scripts%20and%20service%20unit%3A%20install%2C%20update%2C%20apply_patch%2C%20rollback%2C%20seal%2C%20Caddy::deploy%2Fseal_package.sh::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Chained%20vulnerabilities%20and%20trust%20boundaries",
+  "canonical_refs": {
+   "surface": "deploy scripts and service unit: install, update, apply_patch, rollback, seal, Caddy",
+   "boundary": "deploy/seal_package.sh",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries"
+  },
+  "surface": "deploy scripts and service unit: install, update, apply_patch, rollback, seal, Caddy",
+  "boundary": "deploy/seal_package.sh, deploy/scheduler-web.service",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Chained vulnerabilities and trust boundaries",
+  "starting_paths": [
+   "deploy/install.sh",
+   "deploy/update.sh",
+   "deploy/apply_patch.sh",
+   "deploy/rollback.sh",
+   "deploy/seal_package.sh",
+   "deploy/scheduler-web.service",
+   "deploy/Caddyfile.template",
+   "deploy/requirements.txt",
+   "deploy/disk_alert.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "selected_companion_blocks": [
+   "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+   "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+   "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+   "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+   "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+   "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "h8",
+  "reviewed_paths": [
+   "deploy/Caddyfile.template",
+   "deploy/apply_patch.sh",
+   "deploy/disk_alert.py",
+   "deploy/install.sh",
+   "deploy/requirements.txt",
+   "deploy/rollback.sh",
+   "deploy/scheduler-web.service",
+   "deploy/seal_package.sh",
+   "deploy/update.sh",
+   "webapp/serve.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/apply_patch.sh"
+    ],
+    "invariant": "PATCH.json paths cannot let a lower-trust principal write/delete outside the package",
+    "method": "source",
+    "result": "Patch zip supplied by root operator; files[].path not confined (absolute or '..' escapes $PKG; Python and shell disagree on absolute paths); new_sha256 from same zip proves consistency not authenticity. No boundary crossed: same principal could run arbitrary root commands. Hardening only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/update.sh",
+     "deploy/rollback.sh"
+    ],
+    "invariant": "Package zip extraction and swap cannot leave attacker-reachable content",
+    "method": "source",
+    "result": "unzip into root mktemp dir; links caught by seal look(); previous package restored on failure; /opt/scheduler root 755. Operational gap: pip install failure after seal leaves service stopped (availability).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/seal_package.sh"
+    ],
+    "invariant": "Seal makes code root-owned without following symlinks",
+    "method": "source",
+    "result": "pwd -P, refuses system dirs, chown -h/chmod do not follow links; look() reports ownership, write bits, pycache, escaping links, multi-link files; root-only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/install.sh"
+    ],
+    "invariant": "Env and fetched values cannot inject into rendered files or shell",
+    "method": "source",
+    "result": "DOMAIN from operator env or ipify validated by IPv4 regex; ADMIN_USER regex-validated; password prompt only; iptables 80/443 only. Caddy key without fingerprint pin: hardening.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/scheduler-web.service",
+     "deploy/Caddyfile.template",
+     "webapp/serve.py"
+    ],
+    "invariant": "Least privilege service; proxy preserves IP/TLS assumptions",
+    "method": "source",
+    "result": "User=scheduler, NoNewPrivileges, ProtectSystem=strict, only DATA_DIR writable, code/venv read-only; Waitress on 127.0.0.1; Caddy sets fresh X-Forwarded-For consistent with ProxyFix x_for=1.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h8",
+    "reviewed_paths": [
+     "deploy/disk_alert.py",
+     "deploy/requirements.txt"
+    ],
+    "invariant": "Disk alert keeps link private; pins do not drift",
+    "method": "source",
+    "result": "mode=ro DB, link never printed, check_link before post; ortools/protobuf/flask/waitress/ruff/defusedxml pinned; openpyxl/pandas/numpy/scipy lower bounds only.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h8",
+  "hardening_notes": [
+   "apply_patch.sh: confine PATCH.json files[].path (reject absolute, '..', newlines; resolved path must stay under $PKG) in the Python check, before shell mkdir/cp/rm and in put_back; add regression patch with '../x' and '/tmp/x' that must be refused.",
+   "apply_patch.sh/update.sh: new_sha256 is taken from the same zip; consider operator-held checksum or signature for update and patch zips (they run zip content as root).",
+   "apply_patch.sh swallows failed root pip install (|| true); update.sh leaves service stopped if pip install fails after seal; surface error and roll back.",
+   "requirements.txt: openpyxl, pandas, numpy, scipy lower-bound only; consider pins or hashed lock (--require-hashes).",
+   "install.sh: Caddy apt key piped curl|gpg without fingerprint check; IPv6 (ip6tables) not handled.",
+   "scheduler-web.service optional directives: UMask=0077, CapabilityBoundingSet=, RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6, PrivateDevices=yes, ProtectKernelModules/Logs/Clock/Hostname, LockPersonality, RestrictNamespaces, RestrictRealtime, SystemCallFilter=@system-service (test with CP-SAT subprocess; MemoryDenyWriteExecute likely incompatible).",
+   "Caddyfile.template: HSTS no includeSubDomains; response_header_timeout 10m, no read timeouts; no proxy-level security headers (app sets CSP)."
+  ]
+ },
+ {
+  "coverage_id": "exports%20and%20downloads%3A%20send_file%2C%20Content-Disposition%2C%20cell%20neutralisation::webapp%2Fexports.py%23neutralise::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "exports and downloads: send_file, Content-Disposition, cell neutralisation",
+   "boundary": "webapp/exports.py#neutralise",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "exports and downloads: send_file, Content-Disposition, cell neutralisation",
+  "boundary": "webapp/exports.py#neutralise, secure_filename use",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Feature abuse and data leakage",
+  "starting_paths": [
+   "webapp/exports.py",
+   "webapp/routes/exports.py",
+   "webapp/channel_export.py",
+   "webapp/daily_views.py",
+   "webapp/routes/volumes.py",
+   "webapp/routes/week_channels.py",
+   "webapp/routes/day.py",
+   "webapp/routes/analytics.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "h4",
+  "reviewed_paths": [
+   "webapp/access.py",
+   "webapp/channel_export.py",
+   "webapp/coach.py",
+   "webapp/daily_views.py",
+   "webapp/drivers.py",
+   "webapp/excel_agents.py",
+   "webapp/exports.py",
+   "webapp/needed.py",
+   "webapp/routes/analytics.py",
+   "webapp/routes/day.py",
+   "webapp/routes/exports.py",
+   "webapp/routes/volumes.py",
+   "webapp/routes/week_channels.py",
+   "webapp/store.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h4",
+    "reviewed_paths": [
+     "webapp/exports.py",
+     "webapp/routes/exports.py",
+     "webapp/store.py",
+     "webapp/access.py"
+    ],
+    "invariant": "Exports contain only rows of programs/people the requester may open",
+    "method": "source",
+    "result": "_export_args checks can_open or access.programs(); restricted user asking for all gets own programs; user filter needs access.sees; _program_filter empty list matches nothing. Held.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h4",
+    "reviewed_paths": [
+     "webapp/exports.py"
+    ],
+    "invariant": "Free text reaches Excel/CSV cells as text, never a formula",
+    "method": "source",
+    "result": "CSV _csv_safe prefixes apostrophe for = + - @ tab CR; XLSX _text_cell forces inline string. Held.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h4",
+    "reviewed_paths": [
+     "webapp/daily_views.py",
+     "webapp/channel_export.py",
+     "webapp/routes/volumes.py",
+     "webapp/routes/analytics.py",
+     "webapp/needed.py",
+     "webapp/coach.py",
+     "webapp/drivers.py",
+     "webapp/routes/day.py",
+     "webapp/routes/week_channels.py",
+     "webapp/excel_agents.py"
+    ],
+    "invariant": "Sibling workbook builders do not write attacker-controlled text raw into formula cells",
+    "method": "source",
+    "result": "daily_views neutralises name/lob; volumes names checked at input (drivers._name); channel_export.py writes row['name'] and row['language'] raw from planner-uploaded workbook (upload_guard blocks dangerous formulas); no lower-privilege cross-principal path. Hardening only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h4",
+    "reviewed_paths": [
+     "webapp/routes/volumes.py",
+     "webapp/routes/week_channels.py",
+     "webapp/routes/exports.py",
+     "webapp/routes/day.py",
+     "webapp/routes/analytics.py"
+    ],
+    "invariant": "Content-Disposition names and send_file sources not attacker-controlled",
+    "method": "source",
+    "result": "download_name parts whitelisted/regex-sanitised/dates; send_file sources server-side (WORKBOOKS whitelist, store path, BytesIO, RUN_ID regex); scope checked per route. Held.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h4",
+  "hardening_notes": [
+   "webapp/channel_export.py writes associate name and language raw via ws.append, unlike exports.py and daily_views.py (_safe) and bulk_users.py; a name starting with '=' would become a formula in the channel-plan download. Origin is the planner-uploaded workbook, impact low. Apply the neutraliser or set data_type='s'.",
+   "Exports 'Other actions' (record) with program=None for users with all_programs lists events with empty program: signed_in, sign_in_failed and sign_in_held (source IP, username), password_reset, user_disabled, user_deleted. Any non-admin with all_programs and default-on Exports permission can export them. Likely intended as audit trail; consider limiting global event kinds to admins.",
+   "schedule_versions._can_see_run and app._visible keep access to runs the person uploaded after their program assignment is removed, so a former program member can still download those schedule workbooks. Authorisation/lifecycle question for the access unit; settle whether intended.",
+   "_csv_safe prefix list does not cover a leading space or newline before '='; theoretical, Excel does not evaluate such cells."
+  ]
+ },
+ {
+  "coverage_id": "outbound%20webhooks%20and%20secrets%20handling::webapp%2Fnotify.py%23check_link::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Cryptography%20and%20secrets",
+  "canonical_refs": {
+   "surface": "outbound webhooks and secrets handling",
+   "boundary": "webapp/notify.py#check_link",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets"
+  },
+  "surface": "outbound webhooks and secrets handling",
+  "boundary": "webapp/notify.py#check_link, send_json",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Cryptography and secrets",
+  "starting_paths": [
+   "webapp/notify.py",
+   "webapp/routes/group_posts.py",
+   "deploy/disk_alert.py",
+   "webapp/app.py",
+   "webapp/store.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Cryptography and secrets",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "h6",
+  "reviewed_paths": [
+   "deploy/disk_alert.py",
+   "webapp/app.py",
+   "webapp/notify.py",
+   "webapp/routes/day.py",
+   "webapp/routes/group_posts.py",
+   "webapp/routes/people_file.py",
+   "webapp/store.py",
+   "webapp/templates/notifications.html"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h6",
+    "reviewed_paths": [
+     "webapp/notify.py"
+    ],
+    "invariant": "Webhook posts only reach allow-listed https hosts, no redirects, re-validated at send",
+    "method": "source",
+    "result": "check_link: https, no userinfo, port 443, exact host or strict subdomain suffix; post_json re-checks; redirects refused; 10 s timeout; DNS not pinned but admin-supplied link only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h6",
+    "reviewed_paths": [
+     "webapp/routes/group_posts.py",
+     "webapp/store.py",
+     "webapp/templates/notifications.html",
+     "webapp/routes/day.py"
+    ],
+    "invariant": "Stored webhook link is admin-only and never shown in full",
+    "method": "source",
+    "result": "Routes @admin_required; validated on save; template and audit record show only last 4 chars; stored plaintext (accepted, known).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h6",
+    "reviewed_paths": [
+     "deploy/disk_alert.py"
+    ],
+    "invariant": "disk_alert cannot redirect or leak the link",
+    "method": "source",
+    "result": "Re-checks link, prints fixed strings and class names only; env inputs are operator-controlled.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h6",
+    "reviewed_paths": [
+     "webapp/app.py",
+     "webapp/store.py",
+     "webapp/routes/people_file.py"
+    ],
+    "invariant": "CSPRNG secrets, private key file, no secrets in URLs/logs",
+    "method": "source",
+    "result": "secret_key O_EXCL 0600 token_urlsafe(48); all tokens via secrets; scrypt; temp passwords shown once; one-time 128-bit sheet token bound to user.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h6",
+  "hardening_notes": [
+   "people_file.py:278 puts the one-time temporary password in a flash message; Flask's default session is a signed, not encrypted, client cookie, so it sits base64-encoded in the admin's own cookie until the next page. Same principal, not a boundary crossing; a server-side flash or render-once page would avoid it.",
+   "notify.py check_link: *.logic.azure.com and *.api.powerplatform.com are multi-tenant, so an admin (or stolen admin session) can send RTA change text to an attacker-owned Logic App; pinning tenant/region is optional hardening.",
+   "app.py _secret_key: a crash between O_EXCL create and write leaves an empty secret_key file; Flask then fails closed (availability only). Write to temp and rename, or regenerate when empty.",
+   "Webhook link stored plaintext in notify_settings (covered by the known service-account item)."
+  ]
+ },
+ {
+  "coverage_id": "store.py%20SQL%2C%20state%20transitions%2C%20last-admin%2C%20bulk%20ops%2C%20migrations%2C%20races::webapp%2Fstore.py%23update_user::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "store.py SQL, state transitions, last-admin, bulk ops, migrations, races",
+   "boundary": "webapp/store.py#update_user",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "store.py SQL, state transitions, last-admin, bulk ops, migrations, races",
+  "boundary": "webapp/store.py#update_user, ** fields whitelists",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Business logic",
+  "starting_paths": [
+   "webapp/store.py",
+   "webapp/manage.py",
+   "webapp/bulk_users.py",
+   "webapp/routes/people_file.py",
+   "webapp/routes/admin.py",
+   "webapp/leave.py",
+   "webapp/swaps.py",
+   "webapp/approvals.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "h7",
+  "reviewed_paths": [
+   "webapp/access.py",
+   "webapp/approvals.py",
+   "webapp/attendance.py",
+   "webapp/auth.py",
+   "webapp/bulk_users.py",
+   "webapp/change_requests.py",
+   "webapp/leave.py",
+   "webapp/manage.py",
+   "webapp/permissions.py",
+   "webapp/routes/admin.py",
+   "webapp/routes/break_changes.py",
+   "webapp/routes/group_posts.py",
+   "webapp/routes/my_week.py",
+   "webapp/routes/people_file.py",
+   "webapp/runs.py",
+   "webapp/store.py",
+   "webapp/swaps.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/store.py",
+     "webapp/routes/group_posts.py",
+     "webapp/attendance.py",
+     "webapp/runs.py",
+     "webapp/routes/people_file.py",
+     "webapp/routes/admin.py"
+    ],
+    "invariant": "Dynamic SQL identifiers come from constants/whitelists; values bound",
+    "method": "source",
+    "result": "Lead refuted: update_user/update_program/move_leave/move_swap check whitelists; other **fields helpers get literal keywords; table names from DAY_TABLES/DAY_ROW_KEYS; _program_filter gets constants; journal columns app-written.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/routes/admin.py",
+     "webapp/routes/people_file.py",
+     "webapp/access.py",
+     "webapp/store.py",
+     "webapp/manage.py",
+     "webapp/auth.py"
+    ],
+    "invariant": "No manager can disable/delete/demote the last active admin or themselves",
+    "method": "source",
+    "result": "Lead refuted: disable and bulk switch refuse self; can_manage false for self; only an admin manages an admin, so the acting admin stays active. Only gap: two admins disabling each other concurrently (hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/routes/people_file.py",
+     "webapp/bulk_users.py",
+     "webapp/routes/admin.py"
+    ],
+    "invariant": "Bulk user add applies same role/program ceiling, single-use, owner-bound",
+    "method": "source",
+    "result": "Held: token bound to g.user, 30 min, popped; _bulk_plan re-run at add time; supervisor limited to STAFF_ADDS; ALL admin-only. Minor integrity gaps (duplicate roster name within file, non-atomic batch).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/leave.py",
+     "webapp/swaps.py",
+     "webapp/approvals.py",
+     "webapp/store.py",
+     "webapp/routes/my_week.py",
+     "webapp/routes/break_changes.py",
+     "webapp/permissions.py"
+    ],
+    "invariant": "Leave and swap state machines cannot skip approval or double-approve",
+    "method": "source",
+    "result": "Held: move_leave/move_swap compare-and-swap on status and rowcount; TM and RTA steps gated; ask() bounds dates; set_balances rejects NaN/inf. Residuals under hardening.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/change_requests.py",
+     "webapp/store.py",
+     "webapp/routes/break_changes.py",
+     "webapp/attendance.py"
+    ],
+    "invariant": "Break-change and coaching requests cannot create approval from a lower principal or cross program",
+    "method": "source",
+    "result": "Program and permission enforced in route; update_change_request has no status compare-and-swap, so concurrent decide/cancel/expire can overwrite terminal status (same principals, hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h7",
+    "reviewed_paths": [
+     "webapp/store.py"
+    ],
+    "invariant": "Migrations and delete_user fail closed with constant identifiers",
+    "method": "source",
+    "result": "Held: literal ALTER/pragma names; delete_user zeroes roles/programs, randomises hash, cancels open requests.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h7",
+  "hardening_notes": [
+   "store.authenticate failed-login counter is a non-atomic read-modify-write (same issue as candidate h1-lockout-counter-lost-update).",
+   "swaps.answer checks only roster_name == row['other'], not that the answering user can open row['program']. Roster-name uniqueness is enforced only among users sharing a program, so a namesake associate in another program could accept a swap meant for someone else; the TM approval step still follows. Fix: also require can_open(row['program']) and that the account is the one swaps.account(program, other) resolves to.",
+   "swaps: a failed _apply after both sides were TM-approved returns status to waiting_tm with tm_a_id and tm_b_id still set; _mine then returns [] for every approver so nobody can approve or refuse. A swap left 'applying' by a crash has no recover() (unlike leave.recover()), cannot be cancelled and blocks both days through _open_days. Fix: clear tm ids on rollback; add swaps recover() at start-up.",
+   "change_requests: update_change_request has no status guard; use 'update ... where id=? and status=waiting' so concurrent cancel/expire/decide cannot overwrite a terminal state.",
+   "Two admins acting concurrently (A disables or demotes B while B does the same to A) can leave zero active admins; recovery needs manage.py enable-user. Check the last-admin count inside one begin immediate transaction in set_active and update_user.",
+   "admin_user_action does not reject a deleted target (get_user returns deleted rows): an admin or an all-programs supervisor can enable or reset the password of a 'deleted-N' account, which then signs in as a role-less planner with no programs. No data access gained. Fix: 404 when target['deleted'].",
+   "add_user: usernames of the form deleted-<id> are not reserved, so a manager can create one that makes a later delete_user for that id raise IntegrityError. Self-inflicted availability only. Reserve the prefix in username_problem.",
+   "Store._db wraps reads and writes without begin immediate except in transaction(); multi-step check-then-act flows (leave.ask overlap check, add_user username check) rely on the unique constraint or the in-process day lock. Low impact, same principal."
+  ]
+ },
+ {
+  "coverage_id": "templates%2C%20charts.py%2C%20static%2Fapp.js%2C%20response%20headers%20and%20CSP::webapp%2Fapp.py%23after_request%20CSP::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "templates, charts.py, static/app.js, response headers and CSP",
+   "boundary": "webapp/app.py#after_request CSP",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "templates, charts.py, static/app.js, response headers and CSP",
+  "boundary": "webapp/app.py#after_request CSP, Jinja autoescape",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Injection",
+  "starting_paths": [
+   "webapp/templates",
+   "webapp/charts.py",
+   "webapp/static/app.js",
+   "webapp/app.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline",
+   "CLIENT-SIDE.md#Universal moves",
+   "CLIENT-SIDE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "h5",
+  "reviewed_paths": [
+   "webapp/app.py",
+   "webapp/auth.py",
+   "webapp/charts.py",
+   "webapp/routes/theme.py",
+   "webapp/static/app.js",
+   "webapp/templates/base.html",
+   "webapp/templates/dashboard.html",
+   "webapp/templates/error.html",
+   "webapp/templates/split.html"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h5",
+    "reviewed_paths": [
+     "webapp/charts.py"
+    ],
+    "invariant": "charts.py Markup builders escape user strings",
+    "method": "source",
+    "result": "All labels, names, units, tips and aria-labels pass through markupsafe escape(); numeric via _num; data-series only constants. No injection path.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h5",
+    "reviewed_paths": [
+     "webapp/templates/base.html",
+     "webapp/templates/error.html",
+     "webapp/templates/dashboard.html",
+     "webapp/templates/split.html"
+    ],
+    "invariant": "Jinja autoescape never bypassed",
+    "method": "source",
+    "result": "No |safe, no autoescape-off, no render_template_string; flash/error text escaped; tojson|forceescape in attributes; no inline script/handler/style.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h5",
+    "reviewed_paths": [
+     "webapp/static/app.js"
+    ],
+    "invariant": "app.js has no HTML-string DOM sinks",
+    "method": "source",
+    "result": "No innerHTML/insertAdjacentHTML/eval/postMessage; textContent/createElement; navigation targets same-site and re-checked.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h5",
+    "reviewed_paths": [
+     "webapp/app.py",
+     "webapp/auth.py",
+     "webapp/routes/theme.py"
+    ],
+    "invariant": "CSP/headers complete; redirects same-site",
+    "method": "source",
+    "result": "default-src 'self', no unsafe-inline, trusted types, frame-ancestors tight; embed=1 same-origin only; safe_next on redirects.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hunter_label": "h5",
+  "hardening_notes": [
+   "CSP has no explicit script-src/connect-src (falls back to default-src 'self'); adding script-src 'self' only makes intent explicit.",
+   "HSTS max-age one year without includeSubDomains/preload; depends on other subdomains (not source-visible).",
+   "download_name values built from user-influenced names rely on Werkzeug header quoting (see exports unit)."
+  ]
+ },
+ {
+  "coverage_id": "uploads%20and%20paste%3A%20runs%2C%20volumes%2C%20channel-needs%2C%20people%20bulk%2C%20ready::webapp%2Fupload_guard.py%23look::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "uploads and paste: runs, volumes, channel-needs, people bulk, ready",
+   "boundary": "webapp/upload_guard.py#look",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "uploads and paste: runs, volumes, channel-needs, people bulk, ready",
+  "boundary": "webapp/upload_guard.py#look, webapp/zipcheck.py#zip_problem",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Resource and file handling",
+  "starting_paths": [
+   "webapp/upload_guard.py",
+   "webapp/zipcheck.py",
+   "webapp/runs.py",
+   "webapp/routes/runs.py",
+   "webapp/volumes_io.py",
+   "webapp/volumes_draft.py",
+   "webapp/bulk_users.py",
+   "webapp/routes/volumes.py",
+   "webapp/routes/channel_needs.py",
+   "webapp/ready.py",
+   "webapp/excel_agents.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Access control",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "h3",
+  "reviewed_paths": [
+   "deploy/requirements.txt",
+   "webapp/bulk_users.py",
+   "webapp/day.py",
+   "webapp/ready.py",
+   "webapp/routes/channel_needs.py",
+   "webapp/routes/people_file.py",
+   "webapp/routes/runs.py",
+   "webapp/routes/volumes.py",
+   "webapp/runs.py",
+   "webapp/upload_guard.py",
+   "webapp/volumes_draft.py",
+   "webapp/volumes_io.py",
+   "webapp/zipcheck.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h3",
+    "reviewed_paths": [
+     "webapp/routes/runs.py",
+     "webapp/runs.py",
+     "webapp/routes/channel_needs.py"
+    ],
+    "invariant": "Uploaded workbooks saved under server-generated names, zip- and guard-checked; filename cannot traverse or inject argv",
+    "method": "source",
+    "result": "Saved as _incoming/<token_hex>.upload; stored name secure_filename+_short_name under run_dir/input; absolute path argv; list-form subprocess; channel_needs runs zip_problem and upload_look; stale _incoming swept after 24h. No traversal or injection.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h3",
+    "reviewed_paths": [
+     "webapp/routes/volumes.py",
+     "webapp/volumes_io.py",
+     "webapp/volumes_draft.py",
+     "webapp/bulk_users.py",
+     "webapp/routes/people_file.py"
+    ],
+    "invariant": "Volumes and people uploads go through zipcheck and upload_guard and parse in memory",
+    "method": "source",
+    "result": "Lead refuted in part: volumes xlsx -> is_draft/parse_draft/read_table all call zip_problem then look_rows; people -> _rows -> zip_problem + look_rows; in-memory read_only data_only parse; pasted text validated to dates/numbers; tokens token_urlsafe(16) bound to user, 20 min. Row bound missing in _rows (candidate).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h3",
+    "reviewed_paths": [
+     "webapp/zipcheck.py",
+     "webapp/upload_guard.py",
+     "deploy/requirements.txt"
+    ],
+    "invariant": "zip bomb and XML entity controls protect openpyxl parsing",
+    "method": "source",
+    "result": "defusedxml==0.7.1 pinned (installed state not source-visible); zipcheck caps 2000 members, 150 MB/member, 250 MB total, ratio only above 20 MB; look() stops at 400k cells and refuses vba/externalLinks/embeddings. Caps loose for a full load (candidate).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h3",
+    "reviewed_paths": [
+     "webapp/ready.py",
+     "webapp/day.py",
+     "webapp/runs.py"
+    ],
+    "invariant": "Guarded workbooks are opened in a bounded way by the web process",
+    "method": "source",
+    "result": "Full non-read-only load_workbook in web process at ready.py:23, day.py:175, versions.py; bounded only by zipcheck (up to 250 MB expanded). Raised as candidate.",
+    "artifact": null
+   },
+   {
+    "agent_id": "v7",
+    "reviewed_paths": [
+     "webapp/day.py",
+     "webapp/ready.py",
+     "webapp/routes/runs.py",
+     "webapp/upload_guard.py",
+     "webapp/volumes_draft.py",
+     "webapp/zipcheck.py"
+    ],
+    "invariant": "Independent verification of candidate upload.zipcheck-limits-too-loose-for-full-load-workbook-memory",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. zipcheck.py:12-13,32-33 caps expanded size at 150 MB per member / 250 MB total and upload_guard.py:106,131 reads read-only with a 400k-cell stop, so nothing bounds what runs.py:152 (read_inputs, day.py:175) and runs.py:307 (check_ready, ready.py:23) materialise. Route is login_required only (runs.py:105), no per-user upload rate limit seen, and no MemoryMax in deploy/scheduler-web.service (Restart",
+    "artifact": null
+   },
+   {
+    "agent_id": "v8",
+    "reviewed_paths": [
+     "webapp/bulk_users.py",
+     "webapp/routes/volumes.py",
+     "webapp/volumes_draft.py",
+     "webapp/volumes_io.py",
+     "webapp/zipcheck.py"
+    ],
+    "invariant": "Independent verification of candidate upload.read-only-iter-rows-unbounded-in-volumes-and-people-reader",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. bulk_users.py:98-99 builds the full list with unbounded ws.iter_rows(values_only=True) on a read-only worksheet; both callers (volumes_io.py:63 via volumes.py:458, and people_file.py:110) check row count only afterwards. Sibling volumes_draft.py:114 bounds the read, showing the omission. Whether openpyxl pads to a forged dimension is a library fact source cannot show.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "upload.zipcheck-limits-too-loose-for-full-load-workbook-memory",
+   "upload.read-only-iter-rows-unbounded-in-volumes-and-people-reader"
+  ],
+  "unresolved": [],
+  "hunter_label": "h3",
+  "hardening_notes": [
+   "people_file/_rows CSV path: csv.reader raises csv.Error for a field over 131072 chars (and NUL on older Python); parse_pasted has the same exposure with up to 400,000 pasted chars; likely a 500 instead of a message. Catch csv.Error.",
+   "submit_run catches only ValueError, KeyError, OSError, BadZipFile around _channel_upload_check; other parser exceptions give a 500 and leave the .upload file in _incoming until the 24h sweep (runs.py:592).",
+   "Volumes paste path does not run look_rows, but pasted text is parsed strictly to dates and numbers; nothing free-text is stored.",
+   "defusedxml protection of openpyxl depends on the package being installed on the server; consider a startup check that openpyxl.xml.DEFUSEDXML is true."
+  ],
+  "decisions": {
+   "upload.zipcheck-limits-too-loose-for-full-load-workbook-memory": {
+    "decision": "needs_validation",
+    "verifier": "v7",
+    "triage_hint": "low"
+   },
+   "upload.read-only-iter-rows-unbounded-in-volumes-and-people-reader": {
+    "decision": "needs_validation",
+    "verifier": "v8",
+    "triage_hint": "low"
+   }
+  }
+ },
+ {
+  "coverage_id": "webapp%2Fauth.py::webapp%2Fauth.py%23login_required::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "webapp/auth.py",
+   "boundary": "webapp/auth.py#login_required",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "webapp/auth.py#login, session, CSRF, lockout, throttle",
+  "boundary": "webapp/auth.py#login_required, check_csrf, webapp/store.py#authenticate",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/auth.py",
+   "webapp/routes/sign_in.py",
+   "webapp/store.py",
+   "webapp/throttle.py",
+   "webapp/app.py",
+   "webapp/serve.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+   "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+   "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+   "WEB-PROTOCOL-AND-AUTH.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "h1",
+  "reviewed_paths": [
+   "deploy/Caddyfile.template",
+   "webapp/app.py",
+   "webapp/auth.py",
+   "webapp/routes/sign_in.py",
+   "webapp/serve.py",
+   "webapp/store.py",
+   "webapp/throttle.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/auth.py",
+     "webapp/app.py"
+    ],
+    "invariant": "Every POST carries CSRF token; authenticated routes pass login_required incl. must_change/expiry wall",
+    "method": "source",
+    "result": "check_csrf first in before_request (compare_digest, ASCII guard); scripted scan of every @app.route found only login, logout, set_theme undecorated (intended). No bypass.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/auth.py",
+     "webapp/routes/sign_in.py",
+     "webapp/store.py"
+    ],
+    "invariant": "Session lifecycle: fixation, logout revocation, password change/reset invalidation, disable/delete",
+    "method": "source",
+    "result": "Login session.clear() then fresh csrf; load_user rejects inactive users, changed pw stamp, revoked (user_id, at), at < sessions_from; no absolute cap (known).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/auth.py",
+     "webapp/routes/sign_in.py"
+    ],
+    "invariant": "Post-login redirect cannot leave the site",
+    "method": "source",
+    "result": "SAFE_NEXT fullmatch: leading slash, no second slash/backslash/control/space; login_required re-passes next through safe_next. No open redirect.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/serve.py",
+     "webapp/throttle.py",
+     "webapp/routes/sign_in.py",
+     "deploy/Caddyfile.template",
+     "webapp/app.py"
+    ],
+    "invariant": "IP throttle key not client-chosen behind Caddy (ProxyFix x_for=1)",
+    "method": "source",
+    "result": "Waitress on 127.0.0.1; ProxyFix trusts last XFF entry written by Caddy; remote_addr only address use. No client evasion source-visible; depends on Caddy config (hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/store.py",
+     "webapp/routes/sign_in.py",
+     "webapp/serve.py"
+    ],
+    "invariant": "After 5 wrong passwords an account locks even under concurrency",
+    "method": "source",
+    "result": "authenticate reads failed, runs scrypt, writes failed+1 absolute, own connection, no begin immediate; 8 Waitress threads can overwrite each other. Candidate h1-lockout-counter-lost-update (needs_validation).",
+    "artifact": null
+   },
+   {
+    "agent_id": "h1",
+    "reviewed_paths": [
+     "webapp/store.py",
+     "webapp/routes/sign_in.py"
+    ],
+    "invariant": "Unknown, locked and known accounts indistinguishable by message and work",
+    "method": "source",
+    "result": "Messages uniform; dummy scrypt equalises one hash, but a known unlocked account with a padded password is hashed twice (typed then cleaned) vs once for unknown/locked. Candidate h1-login-timing-padded-password-enumeration (needs_validation).",
+    "artifact": null
+   },
+   {
+    "agent_id": "v1",
+    "reviewed_paths": [
+     "webapp/routes/sign_in.py",
+     "webapp/serve.py",
+     "webapp/store.py"
+    ],
+    "invariant": "Independent verification of candidate h1-lockout-counter-lost-update",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. authenticate (store.py:948-973) is read-verify-write on a private connection with no begin immediate (952-967) and no in-process lock; the only sign-in locks are in throttle.py. Waitress runs 8 threads and scrypt sits between read (953) and absolute write (965), so concurrent wrong guesses can share a stale counter and a stale write can zero locked_until. Open fact: whether hashlib.scrypt releases",
+    "artifact": null
+   },
+   {
+    "agent_id": "v2",
+    "reviewed_paths": [
+     "webapp/routes/sign_in.py",
+     "webapp/store.py"
+    ],
+    "invariant": "Independent verification of candidate h1-login-timing-padded-password-enumeration",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. store.py:954-959 does one scrypt check (against _DUMMY_HASH, store.py:465, same method) for unknown or locked usernames; 961-962 does a second check when clean_password(typed) != typed (store.py:447-450 strips space, tab, newline, NBSP, zero-width at both ends), so a padded wrong password costs two scrypt computations only for real unlocked accounts. Nothing equalises this; the IP throttle (sign_i",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "h1-lockout-counter-lost-update",
+   "h1-login-timing-padded-password-enumeration"
+  ],
+  "unresolved": [],
+  "hunter_label": "h1",
+  "hardening_notes": [
+   "Throttle.held/failed protect addresses as seen by ProxyFix(x_for=1): correct while Caddy overwrites or appends X-Forwarded-For (no trusted_proxies). Pin that in deploy docs; do not widen x_for.",
+   "SignInThrottle.failed scans every tracked address on each failure (O(n)); rotating many source addresses (e.g. IPv6 /64) grows the dict and CPU per failed login. Availability-class.",
+   "Per-IP throttle holds a whole address including right passwords; users on one NAT lose sign-in 15 min after 40 wrong tries. Accepted by design.",
+   "Per-account lock at 5 wrong passwords is an accepted lockout-denial lever (admin unlock exists); not re-reported.",
+   "logout revocation entries pruned after 30 days, past the 1-hour lifetime: no replay window.",
+   "No default-deny global login gate: authentication is per-route via decorators; scan found no unprotected non-public route today, but a new route without a decorator would be open (consider an endpoint allow-list check in before_request)."
+  ],
+  "decisions": {
+   "h1-lockout-counter-lost-update": {
+    "decision": "needs_validation",
+    "verifier": "v1",
+    "triage_hint": "low"
+   },
+   "h1-login-timing-padded-password-enumeration": {
+    "decision": "needs_validation",
+    "verifier": "v2",
+    "triage_hint": "low"
+   }
+  }
+ },
+ {
+  "coverage_id": "webapp%2Froutes%2F%2A.py::webapp%2Fpermissions.py%23ENDPOINTS::profile%2Fquick%2Fall-in-scope-subsystems::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "webapp/routes/*.py",
+   "boundary": "webapp/permissions.py#ENDPOINTS",
+   "subsystem": "profile/quick/all-in-scope-subsystems",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "webapp/routes/*.py#all role/program-scoped POST and GET routes",
+  "boundary": "webapp/permissions.py#ENDPOINTS, webapp/access.py#can_open, can_manage",
+  "subsystem": "all in-scope subsystems (quick profile)",
+  "attack_class": "Access control",
+  "starting_paths": [
+   "webapp/permissions.py",
+   "webapp/access.py",
+   "webapp/routes/admin.py",
+   "webapp/routes/people_file.py",
+   "webapp/routes/runs.py",
+   "webapp/routes/schedule_versions.py",
+   "webapp/routes/day.py",
+   "webapp/routes/my_week.py",
+   "webapp/routes/break_changes.py",
+   "webapp/routes/week_channels.py",
+   "webapp/routes/requests.py",
+   "webapp/approvals.py"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Universal moves",
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Validation rules"
+  ],
+  "excluded_blocks": [
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Browser-session attack classes",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "WEB-PROTOCOL-AND-AUTH.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLIENT-SIDE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "CLOUD-AND-DEPLOYMENT.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Core discipline",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Universal moves",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "SUPPLY-CHAIN-AND-RELEASE.md#Validation rules",
+    "reason": "not a trust boundary of this unit; covered by another unit or excluded in architecture.md"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Injection",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Resource and file handling",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Cryptography and secrets",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Business logic",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   },
+   {
+    "block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+    "reason": "another ordinary class is this unit's primary; remaining classes are reviewed in the hunter's wildcard pass or other units"
+   }
+  ],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "h2",
+  "reviewed_paths": [
+   "webapp/access.py",
+   "webapp/app.py",
+   "webapp/approvals.py",
+   "webapp/attendance.py",
+   "webapp/auth.py",
+   "webapp/change_requests.py",
+   "webapp/leave.py",
+   "webapp/permissions.py",
+   "webapp/routes/admin.py",
+   "webapp/routes/analytics.py",
+   "webapp/routes/break_changes.py",
+   "webapp/routes/channel_needs.py",
+   "webapp/routes/day.py",
+   "webapp/routes/exports.py",
+   "webapp/routes/group_posts.py",
+   "webapp/routes/live_stamps.py",
+   "webapp/routes/my_week.py",
+   "webapp/routes/people_file.py",
+   "webapp/routes/requests.py",
+   "webapp/routes/runs.py",
+   "webapp/routes/schedule_delete.py",
+   "webapp/routes/schedule_versions.py",
+   "webapp/routes/sign_in.py",
+   "webapp/routes/volumes.py",
+   "webapp/routes/week_breaks.py",
+   "webapp/routes/week_channels.py",
+   "webapp/swaps.py",
+   "webapp/tests/test_programs.py"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "h2",
+    "reviewed_paths": [
+     "webapp/permissions.py",
+     "webapp/app.py",
+     "webapp/auth.py",
+     "webapp/routes/admin.py",
+     "webapp/routes/people_file.py",
+     "webapp/routes/runs.py",
+     "webapp/routes/day.py",
+     "webapp/routes/analytics.py",
+     "webapp/routes/break_changes.py",
+     "webapp/routes/my_week.py",
+     "webapp/routes/group_posts.py",
+     "webapp/routes/exports.py",
+     "webapp/routes/week_channels.py",
+     "webapp/routes/week_breaks.py",
+     "webapp/routes/schedule_versions.py",
+     "webapp/routes/schedule_delete.py",
+     "webapp/routes/channel_needs.py",
+     "webapp/routes/requests.py",
+     "webapp/routes/volumes.py",
+     "webapp/routes/live_stamps.py"
+    ],
+    "invariant": "Every route has a role gate and a program gate bound to the program the handler acts on",
+    "method": "source",
+    "result": "Enumerated all 135 routes against ENDPOINTS: role gate holds. Central program gate (app.py:394-401) reads request.values (args first) but most /day/* POST handlers read request.form['program'] and never re-check can_open (only day_absences and day_operating_start do). Candidate day.post.program.gate-source-mismatch. Path-id routes go through _run_or_404/_version_or_404.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h2",
+    "reviewed_paths": [
+     "webapp/access.py",
+     "webapp/routes/admin.py",
+     "webapp/routes/people_file.py"
+    ],
+    "invariant": "People-permission holder manages only users within own program scope",
+    "method": "source",
+    "result": "can_manage (access.py:59-71) uses shared-program intersection, not containment; reset shows a temporary password to the manager. Candidate people.can_manage.partial-overlap-takeover.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h2",
+    "reviewed_paths": [
+     "webapp/leave.py",
+     "webapp/swaps.py",
+     "webapp/approvals.py",
+     "webapp/change_requests.py",
+     "webapp/routes/my_week.py",
+     "webapp/routes/break_changes.py"
+    ],
+    "invariant": "Leave, swap, break-change approvals bind role, program, team manager; cancel binds ownership",
+    "method": "source",
+    "result": "Decide paths enforce permission plus may_approve_for plus can_open(row.program); cancel checks requester id. Two minor gaps raised as candidates: swaps.answer matches only roster_name; requests_coaching_cancel redirects with arbitrary request's program.",
+    "artifact": null
+   },
+   {
+    "agent_id": "h2",
+    "reviewed_paths": [
+     "webapp/routes/admin.py",
+     "webapp/routes/people_file.py"
+    ],
+    "invariant": "Account creation and role/program edits cannot mass-assign or exceed grantable programs",
+    "method": "source",
+    "result": "No mass assignment; role from fixed ROLES; all_programs admin-only; programs checked against access.grantable(); non-admin role changes 403. Last-admin lead refuted for disable.",
+    "artifact": null
+   },
+   {
+    "agent_id": "v3",
+    "reviewed_paths": [
+     "webapp/app.py",
+     "webapp/attendance.py",
+     "webapp/routes/analytics.py",
+     "webapp/routes/day.py",
+     "webapp/routes/volumes.py"
+    ],
+    "invariant": "Independent verification of candidate day.post.program.gate-source-mismatch",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. app.py:396-397 derives the key from request.values.get('program') and 403s only if can_open fails; a non-empty ?program=<own> passes, while _day_form (day.py:678) and _posted_day (day.py:682) read request.form['program'] and day_break (791-802) passes it to DayBook.move_break (attendance.py:1268) with no can_open. An empty ?program= skips the wall (app.py:397).",
+    "artifact": null
+   },
+   {
+    "agent_id": "v4",
+    "reviewed_paths": [
+     "webapp/access.py",
+     "webapp/routes/admin.py",
+     "webapp/routes/people_file.py",
+     "webapp/routes/sign_in.py",
+     "webapp/tests/test_programs.py"
+    ],
+    "invariant": "Independent verification of candidate people.can_manage.partial-overlap-takeover",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. access.py:71 returns bool(self.program_ids() & target program ids), a non-empty-intersection test; only admin, supervisor and all_programs targets are excluded (65, 69-70). admin_user_action (people_file.py:236-248) gates only on manager_required and can_manage, then resets at 274-279 with no further check; bulk switch at 224 uses the same gate; sign-in has no restriction. Open question: whether s",
+    "artifact": null
+   },
+   {
+    "agent_id": "v5",
+    "reviewed_paths": [
+     "webapp/routes/admin.py",
+     "webapp/routes/my_week.py",
+     "webapp/swaps.py"
+    ],
+    "invariant": "Independent verification of candidate swaps.answer.roster-name-without-program",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. SwapBook.answer (swaps.py:255-258) authorises only on is_associate and roster_name == row['other']; it never checks the swap's program or the program-bound account that offer() resolved (:216-222, :233). _roster_problem (admin.py:64-67) rejects duplicate roster names only when accounts share a program, so same-named associates in disjoint programs are allowed. Trace holds; only whether such duplic",
+    "artifact": null
+   },
+   {
+    "agent_id": "v6",
+    "reviewed_paths": [
+     "webapp/change_requests.py",
+     "webapp/routes/break_changes.py"
+    ],
+    "invariant": "Independent verification of candidate coaching.cancel.redirect-program-name-leak",
+    "method": "source",
+    "result": "Verdict needs_validation; trace verified=True; preventing control found=False. break_changes.py:116 loads the row for any id (store.py:1217-1220 bare select) with no program/ownership check; changes.cancel (change_requests.py:637-638) refuses non-requesters but the exception is only flashed and line 122 still 303-redirects to requests_coaching?program=row['program']. Sibling request_change_decide (188-189) calls can_open(row['program']); the cancel route omits it. Phase AR w",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "day.post.program.gate-source-mismatch",
+   "people.can_manage.partial-overlap-takeover",
+   "swaps.answer.roster-name-without-program",
+   "coaching.cancel.redirect-program-name-leak"
+  ],
+  "unresolved": [],
+  "hunter_label": "h2",
+  "hardening_notes": [
+   "_can_see_run (app.py:445) lets the uploader see and edit a run after losing the run's program: run access outlives program removal. Confirm intended.",
+   "requests_page and requests_coaching GET are not in permissions.ENDPOINTS and are open to any non-associate with program access regardless of approve_tm/approve_rta; decisions are enforced in the decide methods, so only the read is wider than the matrix.",
+   "OPEN_TO_ALL (app.py:363) skips the program wall for submit_run, run_tag, program_rename, program_setup, workbook; submit_run and run_tag re-check can_open, the others are admin-only or a fixed allow-list. No bypass found.",
+   "Last-admin-on-disable lead refuted; concurrent mutual disable by two admins possible, minor.",
+   "live_stamp returns only digests and checks can_open; no leak found.",
+   "Associate-wall cross-program IDOR on my_week.py:206/224 and break_changes.py:179/204 refuted: decide routes call can_open(row.program) and decide methods re-check roles."
+  ],
+  "decisions": {
+   "day.post.program.gate-source-mismatch": {
+    "decision": "needs_validation",
+    "verifier": "v3",
+    "triage_hint": "medium"
+   },
+   "people.can_manage.partial-overlap-takeover": {
+    "decision": "needs_validation",
+    "verifier": "v4",
+    "triage_hint": "medium"
+   },
+   "swaps.answer.roster-name-without-program": {
+    "decision": "needs_validation",
+    "verifier": "v5",
+    "triage_hint": "low"
+   },
+   "coaching.cancel.redirect-program-name-leak": {
+    "decision": "needs_validation",
+    "verifier": "v6",
+    "triage_hint": "low"
+   }
+  }
+ }
+]

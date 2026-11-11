@@ -41,11 +41,11 @@ def register(app, ctx) -> None:
     def _may_delete(run: Dict[str, Any]) -> bool:
         """Who may delete a schedule (owner, 2026-10-10: "Uploader or admin"): admins, and the person who uploaded
         or ran it."""
-        return bool(g.user["is_admin"]) or run.get("user_id") == g.user["id"]
+        return bool(g.user["is_admin"]) or (run.get("user_id") == g.user["id"] and ctx._can_see_run(run))
 
     def _may_set_in_use(row: Dict[str, Any]) -> bool:
         run = app.extensions["store"].get_run(row["run_id"]) or {}
-        return bool(g.user["is_admin"]) or run.get("user_id") == g.user["id"]
+        return bool(g.user["is_admin"]) or (run.get("user_id") == g.user["id"] and ctx._can_see_run(run))
 
     @app.route("/runs/<run_id>/schedules")
     @login_required

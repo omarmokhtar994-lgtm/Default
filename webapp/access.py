@@ -57,7 +57,7 @@ class Access:
         return allowed(self.store, self.user, "people")
 
     def can_manage(self, target: Dict[str, Any]) -> bool:
-        """Admins manage anyone else; supervisors the planners who share a program with them."""
+        """Admins manage anyone else; supervisors the planners whose programs are all programs the supervisor holds."""
         if target["id"] == self.user["id"]:
             return False
         if self.user.get("is_admin"):
@@ -68,7 +68,8 @@ class Access:
             return True
         if target.get("all_programs"):
             return False
-        return bool(self.program_ids() & set(self.store.user_program_ids(target["id"])))
+        theirs = set(self.store.user_program_ids(target["id"]))
+        return bool(theirs) and theirs <= self.program_ids()  # audit 2026-11-11: every program of theirs is mine, not just one
 
     def sees(self, target: Dict[str, Any]) -> bool:
         """Phase AR (owner: nothing of another program is visible): whether ``target`` is someone this person may see in a

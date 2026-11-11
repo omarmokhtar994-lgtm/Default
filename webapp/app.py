@@ -443,14 +443,17 @@ def create_app(config: Dict[str, Any]) -> Flask:
         return g.access
 
     def _can_see_run(run: Dict[str, Any]) -> bool:
-        if run.get("user_id") == g.user["id"]:
-            return True
-        return _access().can_open(run["program"]) if run.get("program") else _access().everything()
+        """A run of a program needs that program, also for the person who uploaded it (audit 2026-11-11: an uploader whose program was taken away kept
+        control of the run and of the live schedule). A run with no program stays with its uploader."""
+        if run.get("program"):
+            return _access().can_open(run["program"])
+        return run.get("user_id") == g.user["id"] or _access().everything()
 
     def _visible(rows: list, key: str = "program") -> list:
         """Rows (runs, versions, ...) of the programs this person may open."""
         keys = _access().keys()
-        return rows if keys is None else [r for r in rows if r.get(key) in keys or r.get("user_id") == g.user["id"]]
+        return rows if keys is None else [r for r in rows if r.get(key) in keys
+                                          or (not r.get(key) and r.get("user_id") == g.user["id"])]
 
     def _paged(rows: list, arg: str, anchor: str) -> Tuple[list, Optional[Dict[str, Any]]]:
         """Phase AI: a long list 20 at a time; ``?<arg>=N`` opens page N, and each link comes back to ``#anchor``."""

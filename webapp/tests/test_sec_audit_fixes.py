@@ -4,7 +4,11 @@
 Each class pins one lead with made-up people and programs. The audit could not run code, so every lead is first reproduced here (red), then fixed.
 Where a lead was a policy question (a supervisor managing someone who also holds other programs; an uploader keeping a run after losing its program) the
 owner's "Fix all" settles it: the stricter rule is the contract."""
+import io
+import math
+import re
 import shutil
+import zipfile
 import tempfile
 import threading
 import time
@@ -13,6 +17,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
+from webapp import bulk_users, erlang, volumes_io, zipcheck
 from webapp import store as store_module
 from webapp.access import Access
 from webapp.programs import ProgramBook
@@ -344,6 +349,150 @@ class ACoachingCancelNeverNamesAnotherProgram(fx._Walls):
         got = self.cancel("tm_a", self.ours)
         self.assertEqual(got.status_code, 303)
         self.assertEqual(self.store.get_change_request(self.ours)["status"], "cancelled")
+
+
+def _reference_agents_needed(calls, aht_s, interval_s, target, threshold_s, max_occupancy=1.0):
+    """The search as it was before the audit fix (service_level recomputed from scratch at every step): the oracle the faster search must equal."""
+    traffic = erlang.erlangs(calls, aht_s, interval_s)
+    if traffic <= 0:
+        return 0
+    n = int(math.floor(traffic)) + 1
+    while traffic / n - max_occupancy > erlang.TOLERANCE or erlang.service_level(n, calls, aht_s, interval_s, threshold_s) < target - erlang.TOLERANCE:
+        n += 1
+    return n
+
+
+class TheStaffingSearchIsLinear(unittest.TestCase):
+    """Lead volumes.erlang-agents-needed.quadratic-cpu-with-large-typed-total: the search for the fewest agents recomputed the Erlang sums from scratch at
+    every step, so one interval's cost grew with the square of its traffic and one large typed total could hold a server thread for minutes. The Erlang B
+    sum is now carried from one step to the next (same arithmetic in the same order, so every answer is the same); an interval beyond any real centre is
+    refused in words."""
+
+    def test_the_answers_are_the_same_as_before_over_a_grid(self):
+        seen = 0
+        for calls in (1, 7, 30, 120, 480, 1500, 4000, 9000):
+            for aht in (30.0, 180.0, 300.0, 900.0):
+                for interval in (900, 1800, 3600):
+                    for target, threshold in ((0.8, 20.0), (0.9, 30.0), (0.95, 10.0), (1.0, 20.0)):
+                        for occupancy in (0.5, 0.85, 1.0):
+                            got = erlang.agents_needed(calls, aht, interval, target, threshold, occupancy)
+                            want = _reference_agents_needed(calls, aht, interval, target, threshold, occupancy)
+                            self.assertEqual(got, want, (calls, aht, interval, target, threshold, occupancy))
+                            seen += 1
+        self.assertGreater(seen, 1000)
+
+    def test_chat_answers_are_the_same_as_before(self):
+        for calls in (10, 400, 3000):
+            for concurrency in (1.0, 2.0, 3.5):
+                got = erlang.chat_agents_needed(calls, 420.0, 900, 0.8, 30.0, concurrency, 0.85)
+                want = _reference_agents_needed(calls, 420.0 / concurrency, 900, 0.8, 30.0, 0.85)
+                self.assertEqual(got, want, (calls, concurrency))
+
+    def test_a_very_large_interval_is_answered_quickly(self):
+        # 50,000 Erlangs in one 15-minute interval with a strict service level and no occupancy cap: the service level is what binds, which is the slow
+        # case (with a cap the old search stopped on occupancy before it summed the Erlang terms, and a lax answer time ends in a few steps)
+        started = time.monotonic()
+        n = erlang.agents_needed(150_000, 300.0, 900, 0.99, 0.0, 1.0)
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertGreater(n, 50_000)
+
+    def test_an_interval_beyond_any_real_centre_is_refused_in_words(self):
+        with self.assertRaises(ValueError) as caught:
+            erlang.agents_needed(5_000_000, 7200.0, 900, 0.8, 20.0, 0.85)
+        self.assertIn("too large", str(caught.exception))
+
+
+def _sheet(rows, dimension=None):
+    """A one-sheet workbook of ``rows`` as bytes; ``dimension`` rewrites the sheet's size tag, which the uploader controls and which a reader in
+    read-only mode takes the width of every row from."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    for row in rows:
+        ws.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    if dimension is None:
+        return buf.getvalue()
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(buf.getvalue())) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                data = re.sub(rb'<dimension ref="[^"]*"\s*/>', f'<dimension ref="{dimension}"/>'.encode(), data)
+            dst.writestr(info, data)
+    return out.getvalue()
+
+
+class TheSheetReadersAreBounded(unittest.TestCase):
+    """Lead upload.read-only-iter-rows-unbounded-in-volumes-and-people-reader. The shared reader took every row, as wide as the sheet's own size tag says,
+    before any row limit applied. Measured while fixing it: a tag of A1:XFD1048576 does not add rows but pads every real row to 16,384 cells, so a file
+    of 100,000 short rows would hold about 13 GB of empty cells. Rows are now cut at a width no table of these sheets needs and refused beyond a row
+    limit as they are read."""
+    FORGED = "A1:XFD1048576"
+
+    def test_a_forged_size_tag_does_not_widen_the_rows(self):
+        data = _sheet([["username", "display name"], ["a", "A"], ["b", "B"]], dimension=self.FORGED)
+        rows = bulk_users._rows(data, "people.xlsx")
+        self.assertEqual(len(rows), 3)
+        self.assertLessEqual(max(len(r) for r in rows), 64)
+        self.assertEqual(rows[1][:2], ["a", "A"])
+
+    def test_the_volumes_reader_reads_a_forged_file_the_same_way(self):
+        data = _sheet([["date", "time", "calls"], ["2026-10-14", "09:00", 12]], dimension=self.FORGED)
+        rows = volumes_io.read_table(data, "actuals.xlsx")
+        self.assertLessEqual(max(len(r) for r in rows), 64)
+        self.assertEqual(rows[1][:3], ["2026-10-14", "09:00", 12])
+
+    def test_more_rows_than_the_limit_are_refused_as_they_are_read(self):
+        data = _sheet([[n] for n in range(300)])
+        with self.assertRaises(ValueError) as caught:
+            bulk_users._rows(data, "people.xlsx", max_rows=100)
+        self.assertIn("more than 100 rows", str(caught.exception))
+        self.assertEqual(len(bulk_users._rows(data, "people.xlsx", max_rows=300)), 300)
+
+    def test_csv_rows_are_bounded_too(self):
+        text = ("a,b\n" * 300).encode()
+        with self.assertRaises(ValueError):
+            bulk_users._rows(text, "people.csv", max_rows=100)
+
+    def test_an_ordinary_people_sheet_still_reads(self):
+        rows = bulk_users.read_people(_sheet([["Username", "Display name", "Role", "Programs", "Roster name", "Team manager", "Password"],
+                                              ["lina_x", "Lina X", "Planner", "NMG", "", "", ""]]), "people.xlsx")
+        self.assertEqual([r["username"] for r in rows], ["lina_x"])
+
+
+def _stored_zip(size):
+    """A zip of one stored (uncompressed) member of ``size`` bytes: it passes the ratio rule, so only the size limits can refuse it."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("xl/worksheets/sheet1.xml", b"x" * size)
+    return out.getvalue()
+
+
+class ARunWorkbookHasARunSizedLimit(unittest.TestCase):
+    """Lead upload.zipcheck-limits-too-loose-for-full-load-workbook-memory. A schedule workbook is opened whole by the web process (every cell becomes an
+    object), yet the size limits were sized for a volumes file of 400,000 rows: 150 MB a member, 250 MB in all. Of the 330 workbooks in this repository the
+    largest is 4.5 MB opened (1.7 MB a member). A schedule upload now has its own limit (25 MB a member, 40 MB in all, five times the largest real one);
+    the volumes and people readers keep theirs."""
+
+    def test_a_workbook_that_opens_far_beyond_any_schedule_is_refused_for_a_run(self):
+        data = _stored_zip(30 * 1024 * 1024)
+        self.assertEqual(zipcheck.zip_problem(data, **zipcheck.RUN_LIMITS), zipcheck.PROBLEM)
+
+    def test_the_same_file_is_still_read_for_a_volumes_upload(self):
+        self.assertEqual(zipcheck.zip_problem(_stored_zip(30 * 1024 * 1024)), "")
+
+    def test_the_largest_real_workbook_passes_the_run_limit(self):
+        from pathlib import Path
+        real = Path(__file__).resolve().parents[2] / "engine" / "regression_assets" / "ready_inputs" / "SAKS_NEW_RC8_6_1_INPUT_READY.xlsx"
+        self.assertEqual(zipcheck.zip_problem(real, **zipcheck.RUN_LIMITS), "")
+
+    def test_the_run_routes_use_the_run_limit(self):
+        from pathlib import Path
+        for name in ("runs.py", "channel_needs.py"):
+            text = (Path(__file__).resolve().parents[1] / "routes" / name).read_text()
+            self.assertIn("zip_problem(path, **RUN_LIMITS)", text, name)
 
 
 if __name__ == "__main__":

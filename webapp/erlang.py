@@ -16,6 +16,8 @@ import math
 from typing import Optional
 
 TOLERANCE = 1e-12   # where a comparison is exact on paper, a float may be a hair off
+MAX_TRAFFIC = 50_000.0  # Erlangs in one interval: about fifty thousand agents on the phones at once, far beyond any centre; a typed total can reach
+                        # this only by mistake, and the search below costs one step per agent, so it is refused in words instead of run for minutes
 
 
 def _check_volume(calls: float, aht_s: float, interval_s: float) -> None:
@@ -77,11 +79,22 @@ def agents_needed(calls: float, aht_s: float, interval_s: int, target: float, th
     traffic = erlangs(calls, aht_s, interval_s)
     if traffic <= 0:
         return 0
+    if traffic > MAX_TRAFFIC:
+        raise ValueError(f"{traffic:,.0f} Erlangs in one interval is too large to staff: check the volume, the handle time and the interval length.")
     n = int(math.floor(traffic)) + 1
-    # Compared to 12 places, as a spreadsheet does: 23.8 / 34 is exactly 0.7 on paper and 0.7000000000000001 in a float, and 34 agents are not too many
-    while traffic / n - max_occupancy > TOLERANCE or service_level(n, calls, aht_s, interval_s, threshold_s) < target - TOLERANCE:
+    # The Erlang B sum is carried from one agent count to the next (the same arithmetic in the same order as ``erlang_c``, so every answer is the
+    # same as recomputing it at each step); audit 2026-11-11: recomputing made the search cost a step per agent per candidate.
+    b = 1.0
+    for k in range(1, n):
+        b = traffic * b / (k + traffic * b)
+    while True:
+        b = traffic * b / (n + traffic * b)
+        # Compared to 12 places, as a spreadsheet does: 23.8 / 34 is exactly 0.7 on paper and 0.7000000000000001 in a float, and 34 agents are not too many
+        if not traffic / n - max_occupancy > TOLERANCE:
+            wait = b / (1.0 - (traffic / n) * (1.0 - b))
+            if not max(0.0, 1.0 - wait * math.exp(-(n - traffic) * threshold_s / aht_s)) < target - TOLERANCE:
+                return n
         n += 1
-    return n
 
 
 def chat_agents_needed(calls: float, aht_s: float, interval_s: int, target: float, threshold_s: float,

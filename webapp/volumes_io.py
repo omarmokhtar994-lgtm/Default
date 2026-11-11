@@ -60,7 +60,7 @@ def read_table(data: bytes, filename: str) -> List[List[Any]]:
     """The cells of an uploaded csv or workbook (first sheet), after the site's own look at it (no card numbers, addresses or links out)."""
     if not filename.lower().endswith((".csv", ".xlsx")):
         raise ValueError("Upload a .csv or .xlsx file, or paste the table.")
-    rows = _rows(data, filename)
+    rows = _rows(data, filename, max_rows=MAX_ROWS)
     if len(rows) > MAX_ROWS:
         raise ValueError(f"At most {MAX_ROWS:,} rows at a time; this file has {len(rows):,}.")
     refused = look_rows(rows, "the volumes file")

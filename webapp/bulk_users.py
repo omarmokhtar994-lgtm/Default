@@ -87,17 +87,38 @@ def people_workbook(people: List[Dict[str, Any]]) -> bytes:
     return out.getvalue()
 
 
-def _rows(data: bytes, filename: str) -> List[List[Any]]:
+MAX_SHEET_ROWS = 5_000  # rows read from a people sheet, blank ones included (at most MAX_ROWS people are kept)
+MAX_SHEET_COLS = 64     # cells read from each row: no table of these sheets is wider
+
+
+def _rows(data: bytes, filename: str, max_rows: int = MAX_SHEET_ROWS, max_cols: int = MAX_SHEET_COLS) -> List[List[Any]]:
+    """The rows of an uploaded csv or workbook (first sheet). Audit 2026-11-11: rows are cut at ``max_cols`` cells (a reader in read-only mode pads every
+    row to the width the file's own size tag claims, up to 16,384 cells) and the read stops, in words, at more than ``max_rows`` rows."""
+    too_many = f"This file has more than {max_rows:,} rows, which is more than the site reads at once."
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8-sig", errors="replace")
-        return [row for row in csv.reader(io.StringIO(text))]
+        rows: List[List[Any]] = []
+        for row in csv.reader(io.StringIO(text)):
+            rows.append(row[:max_cols])
+            if len(rows) > max_rows:
+                raise ValueError(too_many)
+        return rows
     too_big = zip_problem(data)  # Phase AU: a small file that opens huge is not read
     if too_big:
         raise ValueError(too_big)
     try:
         ws = load_workbook(io.BytesIO(data), read_only=True, data_only=True).worksheets[0]
-        return [[cell for cell in row] for row in ws.iter_rows(values_only=True)]
-    except (zipfile.BadZipFile, InvalidFileException, KeyError, IndexError, OSError, ValueError) as exc:
+        rows = []
+        for row in ws.iter_rows(values_only=True, max_col=max_cols):
+            rows.append(list(row))
+            if len(rows) > max_rows:
+                raise ValueError(too_many)
+        return rows
+    except ValueError as exc:
+        if str(exc) == too_many:
+            raise
+        raise ValueError(NOT_A_SHEET) from exc
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, IndexError, OSError) as exc:
         raise ValueError(NOT_A_SHEET) from exc
 
 

@@ -14,7 +14,7 @@ from werkzeug.utils import secure_filename
 from ..auth import login_required
 from ..channel_template import channel_workbook
 from ..day import read_inputs
-from ..zipcheck import zip_problem
+from ..zipcheck import RUN_LIMITS, zip_problem
 
 
 def register(app, ctx) -> None:
@@ -57,7 +57,7 @@ def register(app, ctx) -> None:
         incoming.mkdir(exist_ok=True)
         path = incoming / f"{secrets.token_hex(8)}.upload"
         upload.save(path)
-        too_big = zip_problem(path)  # Phase AU
+        too_big = zip_problem(path, **RUN_LIMITS)  # Phase AU
         if too_big:
             path.unlink(missing_ok=True)
             flash(too_big)

@@ -27,7 +27,7 @@ from ..results import version_summary
 from ..run_admin import PICK_UNIT, apply_run_change, preview_run_change, unit_keys
 from ..runs import MODES, READY, RESUMABLE, RunQueue, parse_options
 from ..upload_guard import look as upload_look
-from ..zipcheck import zip_problem
+from ..zipcheck import RUN_LIMITS, zip_problem
 
 
 def register(app, ctx) -> None:
@@ -139,7 +139,7 @@ def register(app, ctx) -> None:
             path.unlink()
             flash("Upload an Excel workbook (.xlsx): that file is not one.")
             return redirect(url_for("home"))
-        too_big = zip_problem(path)  # Phase AU: before any workbook library opens it
+        too_big = zip_problem(path, **RUN_LIMITS)  # Phase AU: before any workbook library opens it
         if too_big:
             path.unlink()
             flash(too_big)

@@ -28,7 +28,7 @@
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
       <span class="ico i-palette" aria-hidden="true"></span>
       <span class="looks" role="group" aria-label="Look">
-        {% for value, name in (('light', 'Tide'), ('dark', 'Night watch'), ('draft', 'Drafting table')) %}<button class="look" name="theme" value="{{ value }}" data-look="{{ value }}" aria-pressed="{{ 'true' if theme == value else 'false' }}">{{ name }}</button>{% endfor %}
+        {% for value, name in (('light', 'Atelier'), ('dark', 'Lacquer'), ('draft', 'Drafting table'), ('graphite', 'Platinum')) %}<button class="look" name="theme" value="{{ value }}" data-look="{{ value }}" aria-pressed="{{ 'true' if theme == value else 'false' }}">{{ name }}</button>{% endfor %}
       </span>
     </form>
     <a href="{{ url_for('change_password') }}" title="Your account: change your password"><span class="ico i-gear" aria-hidden="true"></span>Settings</a>

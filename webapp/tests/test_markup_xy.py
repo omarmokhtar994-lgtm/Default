@@ -98,14 +98,16 @@ CSS = Path(__file__).resolve().parents[1] / "static" / "app.css"
 # Re-pinned in Phase BA (owner, 2026-10-25: the three looks Tide, Night watch and Drafting table, evidence/phase_az/prototype):
 # the default night look is now Night watch (navy), so its ink, edges, picked background, text on status fills and
 # channel colours changed; the channels are brighter with dark text on Night watch, because the deeper set measured under 3:1 on navy.
-NIGHT = {"--action": "#E7EEFB", "--action-hover": "#FFFFFF", "--on-action": "#0A1426", "--edge": "#6C87B8",
-         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#080F1E",
-         "--on-short": "#080F1E", "--on-gap": "#080F1E", "--on-over": "#080F1E", "--selected": "#152340",
+# Re-pinned in Phase BN (owner, 2026-11-12: Night watch became Lacquer, Tide became Atelier; samples in evidence/phase_bn/samples, contrast
+# measured in evidence/phase_ba/contrast.py with 0 failures): the measured token values below are the new looks'. The status and channel colours are unchanged.
+NIGHT = {"--action": "#EEF1F6", "--action-hover": "#FFFFFF", "--on-action": "#0A0D13", "--edge": "#6B7894",
+         "--done": "#54749A", "--covered-text": "#2BC4B4", "--over-text": "#9086EE", "--on-covered": "#0A0D13",
+         "--on-short": "#0A0D13", "--on-gap": "#0A0D13", "--on-over": "#0A0D13", "--selected": "#1C2231",
          "--ch-email": "#3FAE81"}
-DAY = {"--action": "#12233A", "--action-hover": "#263B5A", "--on-action": "#FFFFFF", "--edge": "#6B7C96",
-       "--done": "#7692B4", "--covered-text": "#0B776C", "--over-text": "#5F4CCB", "--covered": "#06A496",
+DAY = {"--action": "#101826", "--action-hover": "#26324A", "--on-action": "#FFFFFF", "--edge": "#7B8596",
+       "--done": "#8795A8", "--covered-text": "#0B776C", "--over-text": "#5F4CCB", "--covered": "#06A496",
        "--short": "#C98304", "--gap": "#D53D38", "--over": "#7560E3", "--on-covered": "#0E1A2B",
-       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#E1EAF4",
+       "--on-short": "#0E1A2B", "--on-gap": "#FFFFFF", "--on-over": "#FFFFFF", "--selected": "#F4F0E6",
        "--ch-chat": "#B4468F"}
 # Re-pinned in Phase BA: the day look is now Tide (navy ink, #12233A; edges and picked background follow it), and its
 # Chat colour is #B4468F because white text on the old #C2549F measured 4.1:1 (4.5:1 is needed).

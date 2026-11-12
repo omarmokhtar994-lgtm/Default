@@ -6,6 +6,12 @@ Owner, 2026-10-07: redesign in the "Control room (dark)" direction (chosen from
 four previews), keep the name "Team Scheduler". v1 (light limestone and Nile)
 is replaced.
 
+v6, 2026-11-12 (Phase BN, owner: "change Tide with A and Night with B and add C as a fourth theme"; samples in `evidence/phase_bn/samples`): the four looks are
+**Atelier** (light, replaces Tide: page `#F3F4F6`, brass `--hi` `#7A5A1E`), **Lacquer** (dark, the default, replaces Night watch: page `#0A0D13`, panels `#121722`,
+champagne `--hi` `#D9C39A`), **Drafting table** (unchanged) and **Platinum** (new, cookie value `graphite`: page `#16171A`, takes the dark status set). Cookie values `light`
+and `dark` keep their meaning (they now draw Atelier and Lacquer). Status and channel colours are the measured set, unchanged. Contrast of every pair in the four looks:
+`evidence/phase_ba/contrast.py` (0 failures). The v5 text below that names Tide and Night watch is the history of those two looks.
+
 v5.1, 2026-10-25 (Phase BB, owner: "build it ... with 0 risk"): depth on columns, horizontal bars, tile strips, program cards and run progress bars, as paint only (see `docs/HANDOFF.md` Phase BB); the front face is always the value, line charts and heat tables stay flat.
 v5, 2026-10-25 (Phase BA, owner: "I like this one so we have our 3 designs"; samples in `evidence/phase_az/prototype`, the audit in
 `evidence/phase_ba`): the three looks are now **Tide** (light), **Night watch** (dark, the default) and **Drafting table**. They replace

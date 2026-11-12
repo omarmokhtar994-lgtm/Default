@@ -4,13 +4,13 @@
 :root {
   /* Night watch, the default dark look (Phase BA, owner's pick 2026-10-25, evidence/phase_az/prototype look 2): deep navy,
      hairline panels. Colour still means state; the status and channel colours are the measured set. */
-  --night: #080F1E;        /* page */
-  --rail-bg: #050A14;      /* the menu, a step below the page */
-  --console: #0F1A31;      /* panels, chart surface */
-  --console-2: #152340;
-  --rail: #243556;         /* borders, grid lines */
-  --paper: #E7EEFB;        /* ink */
-  --dim: #9DB0CF;         /* secondary ink */
+  --night: #0A0D13;        /* page */
+  --rail-bg: #07090E;      /* the menu, a step below the page */
+  --console: #121722;      /* panels, chart surface */
+  --console-2: #171D2A;
+  --rail: #242B3B;         /* borders, grid lines */
+  --paper: #EEF1F6;        /* ink */
+  --dim: #9CA7BA;         /* secondary ink */
   --covered: #2BC4B4;      /* status fills: fully covered */
   --short: #F2A93B;        /*  short of the target */
   --gap: #E5534B;          /*  below the floor */
@@ -19,78 +19,87 @@
   --over-text: #9086EE;    /* "over-staffed" written as text */
   --short-ink: #F2A93B;
   --gap-ink: #FF8A82;
-  --on-covered: #080F1E; --on-short: #080F1E; --on-gap: #080F1E; --on-over: #080F1E;  /* text on the status fills */
+  --on-covered: #0A0D13; --on-short: #0A0D13; --on-gap: #0A0D13; --on-over: #0A0D13;  /* text on the status fills */
   /* everything you can press or move is ink, never a status colour (Phase Y, evidence/phase_y/PALETTE.md) */
-  --action: #E7EEFB;       /* links, buttons, the focus ring, picked items, breaks you can move */
+  --action: #EEF1F6;       /* links, buttons, the focus ring, picked items, breaks you can move */
   --action-hover: #FFFFFF;
-  --on-action: #0A1426;    /* the label on a filled button */
-  --edge: #6C87B8;         /* field and button edges */
-  --selected: #152340;     /* the background of a picked tab, chip or option */
+  --on-action: #0A0D13;    /* the label on a filled button */
+  --edge: #6B7894;         /* field and button edges */
+  --selected: #1C2231;     /* the background of a picked tab, chip or option */
   --done: #54749A;         /* a finished stage */
-  --hi: #E7EEFB;          /* the highlight a picked item gets (the Drafting table look uses a marker colour) */
-  --on-hi: #0A1426;
-  --panel: rgba(15, 26, 49, .9);
-  --header: rgba(8, 15, 30, .96);
-  --well: rgba(8, 15, 30, .6);
+  --hi: #D9C39A;          /* the highlight a picked item gets (the Drafting table look uses a marker colour) */
+  --on-hi: #17130A;
+  --panel: #121722;
+  --header: rgba(10, 13, 19, .94);
+  --well: rgba(7, 9, 14, .7);
   --bg-line: rgba(127, 162, 226, .04);
-  --empty-cell: rgba(36, 53, 86, .5);
-  --empty-key: rgba(36, 53, 86, .9);
+  --empty-cell: rgba(36, 43, 59, .6);
+  --empty-key: #242B3B;
   --covered-soft: rgba(43, 196, 180, .12);  /* a wash behind "covered" or "ready" */
   --gap-soft: rgba(229, 83, 75, .18);
   --short-soft: rgba(242, 169, 59, .16);
-  --hover: rgba(231, 238, 251, .06);
+  --hover: rgba(238, 241, 246, .055);
   --glow: rgba(43, 196, 180, .45);
   --glow-strong: rgba(43, 196, 180, .7);
   --pulse: rgba(242, 169, 59, .9);
   --shadow: rgba(0, 0, 0, .4);
-  --code-bg: #050A14;
+  --code-bg: #07090E;
   --code-ink: #CDD3DB;
   --ch-phone: #4C86FF; --ch-chat: #E070BE; --ch-email: #3FAE81; --ch-ink: #06142B;  /* white text is 4.5:1 or better only on the deeper light-look set */
   /* shapes (Phase BA): each look sets its own */
-  --r-panel: 16px; --r-ctl: 10px;
+  --r-panel: 16px; --r-ctl: 9px;
   /* chart series and heat levels */
   --c-blue: #3987e5; --c-aqua: #199e70; --c-orange: #d95926; --c-yellow: #c98500;
-  --h0: #152340; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
+  --h0: #171D2A; --h1: #4a3a2c; --h2: #7a4224; --h3: #a94b22; --h4: #d95926;
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;  /* Phase AG: one variable family, width set where used */
   --text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
 /* Tide, the light look (Phase BA, owner's pick 2026-10-25): the person's choice, or the device's when they have not chosen */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="draft"]) {
-    --rail-bg: #F4F8FC; --night: #E8EFF6; --console: #FFFFFF; --console-2: #F3F7FB; --rail: #D3DEEA; --paper: #12233A; --dim: #46556F;
+  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) {
+    --rail-bg: #FFFFFF; --night: #F3F4F6; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #E4E7EC; --paper: #101826; --dim: #566173;
     /* status fills 3:1 or more on white; teal and amber light with dark text, red and violet darker with white
        text, so the four stay apart for colour-blind readers too (palette validator: worst pair ΔE 8.6) */
     --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
     --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
     --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
-    --action: #12233A; --action-hover: #263B5A; --on-action: #FFFFFF; --edge: #6B7C96; --selected: #E1EAF4; --hi: #12233A; --on-hi: #FFFFFF;
-    --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(232, 239, 246, .96); --well: #F3F7FB;
-    --bg-line: transparent; --empty-cell: #E1EAF4; --empty-key: #D3DEEA;
+    --action: #101826; --action-hover: #26324A; --on-action: #FFFFFF; --edge: #7B8596; --selected: #F4F0E6; --hi: #7A5A1E; --on-hi: #FFFFFF;
+    --done: #8795A8; --panel: #FFFFFF; --header: rgba(255, 255, 255, .94); --well: #F6F7F9;
+    --bg-line: transparent; --empty-cell: #ECEFF3; --empty-key: #E4E7EC;
     --covered-soft: rgba(11, 119, 108, .1);
-    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
-    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .22);
-    --code-bg: #F3F7FB; --code-ink: #12233A; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 20px; --r-ctl: 12px;
+    --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(16, 24, 38, .045);
+    --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(16, 24, 38, .16);
+    --code-bg: #F6F7F9; --code-ink: #101826; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 14px; --r-ctl: 8px;
     --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-    --h0: #E1EAF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+    --h0: #ECEFF3; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --rail-bg: #F4F8FC; --night: #E8EFF6; --console: #FFFFFF; --console-2: #F3F7FB; --rail: #D3DEEA; --paper: #12233A; --dim: #46556F;
+  --rail-bg: #FFFFFF; --night: #F3F4F6; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #E4E7EC; --paper: #101826; --dim: #566173;
   --covered: #06A496; --short: #C98304; --gap: #D53D38; --over: #7560E3;
   --on-covered: #0E1A2B; --on-short: #0E1A2B; --on-gap: #FFFFFF; --on-over: #FFFFFF;
   --covered-text: #0B776C; --over-text: #5F4CCB; --short-ink: #8C5300; --gap-ink: #B3261E;
-  --action: #12233A; --action-hover: #263B5A; --on-action: #FFFFFF; --edge: #6B7C96; --selected: #E1EAF4; --hi: #12233A; --on-hi: #FFFFFF;
-  --done: #7692B4; --panel: rgba(255, 255, 255, .92); --header: rgba(232, 239, 246, .96); --well: #F3F7FB;
-  --bg-line: transparent; --empty-cell: #E1EAF4; --empty-key: #D3DEEA;
+  --action: #101826; --action-hover: #26324A; --on-action: #FFFFFF; --edge: #7B8596; --selected: #F4F0E6; --hi: #7A5A1E; --on-hi: #FFFFFF;
+  --done: #8795A8; --panel: #FFFFFF; --header: rgba(255, 255, 255, .94); --well: #F6F7F9;
+  --bg-line: transparent; --empty-cell: #ECEFF3; --empty-key: #E4E7EC;
   --covered-soft: rgba(11, 119, 108, .1);
-  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(18, 35, 58, .05);
-  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(18, 35, 58, .22);
-  --code-bg: #F3F7FB; --code-ink: #12233A; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 20px; --r-ctl: 12px;
+  --gap-soft: rgba(179, 38, 30, .1); --short-soft: rgba(140, 83, 0, .1); --hover: rgba(16, 24, 38, .045);
+  --glow: transparent; --glow-strong: transparent; --pulse: rgba(233, 162, 59, .6); --shadow: rgba(16, 24, 38, .16);
+  --code-bg: #F6F7F9; --code-ink: #101826; --ch-phone: #1A47A8; --ch-chat: #B4468F; --ch-email: #2F7D5B; --ch-ink: #FFFFFF; --r-panel: 14px; --r-ctl: 8px;
   --c-blue: #2a78d6; --c-aqua: #1baf7a; --c-orange: #eb6834; --c-yellow: #eda100;
-  --h0: #E1EAF4; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
+  --h0: #ECEFF3; --h1: #F8D6C5; --h2: #F2B08F; --h3: #EB8A5E; --h4: #D95926;
   color-scheme: light;
+}
+/* Platinum (Phase BN, owner 2026-11-12, sample C): camera-body grey, hairlines instead of shadows, condensed headings, no colour accent; the status and
+   channel colours are the dark set from :root */
+:root[data-theme="graphite"] {
+  --night: #16171A; --rail-bg: #111214; --console: #1F2125; --console-2: #26292E; --rail: #35383F; --paper: #F2F3F5; --dim: #A6ABB3;
+  --action: #F2F3F5; --action-hover: #FFFFFF; --on-action: #16171A; --edge: #767C86; --selected: #2B2E34; --hi: #F2F3F5; --on-hi: #16171A;
+  --panel: #1F2125; --header: rgba(22, 23, 26, .96); --well: rgba(17, 18, 20, .7); --hover: rgba(242, 243, 245, .06); --shadow: rgba(0, 0, 0, .5);
+  --bg-line: transparent; --empty-cell: rgba(53, 56, 63, .6); --empty-key: #35383F; --code-bg: #111214; --h0: #26292E; --r-panel: 6px; --r-ctl: 4px;
+  color-scheme: dark;
 }
 /* Drafting table (Phase BA, owner's pick 2026-10-25, look 3): a dark field with one light, hatched sheet that holds the page;
    sections are bracketed; the only accent is a marker colour (--hi) that never means a status */
@@ -1669,11 +1678,12 @@ body.embed .frame > main { max-width: none; padding: 10px 14px 24px; }
 
 /* ------------------------------------------------------------ Phase BA: the three looks (owner's pick 2026-10-25) */
 /* The page behind everything, one per look. Night watch is the default; Tide for a light device or when picked; Drafting table when picked. */
-:root { --page-bg: radial-gradient(60rem 38rem at 12% -10%, #17285C 0%, transparent 62%), radial-gradient(50rem 36rem at 100% 10%, #0C3547 0%, transparent 60%); --page-field: var(--night); }
+:root { --page-bg: radial-gradient(70rem 36rem at 88% -10%, rgba(217, 195, 154, .08) 0%, transparent 60%), radial-gradient(56rem 34rem at -6% 0%, rgba(86, 110, 170, .1) 0%, transparent 55%); --page-field: var(--night); }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="draft"]) { --page-bg: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 0%, #C6EEDF 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 108%, #DCE8F4 0%, transparent 62%); }
+  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) { --page-bg: none; }
 }
-:root[data-theme="light"] { --page-bg: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3 0%, transparent 62%), radial-gradient(46rem 32rem at 100% 0%, #C6EEDF 0%, transparent 60%), radial-gradient(40rem 30rem at 55% 108%, #DCE8F4 0%, transparent 62%); }
+:root[data-theme="light"] { --page-bg: none; }
+:root[data-theme="graphite"] { --page-bg: none; }
 :root[data-theme="draft"] { --page-bg: radial-gradient(60rem 30rem at 50% -10%, #2B3733 0%, transparent 70%), radial-gradient(#FFFFFF14 1px, transparent 1.2px); --page-size: auto, 22px 22px; --page-field: #1B2321; }
 body { background-color: var(--page-field); background-image: var(--page-bg); background-size: var(--page-size, auto); background-repeat: no-repeat, repeat; }  /* no fixed attachment and no blur: both repaint on every scroll */
 .panel, .top { backdrop-filter: none; }
@@ -1908,3 +1918,18 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .skip-in:focus { position: static; display: inline-block; margin: 4px 0 8px; }
 .exp-row label { min-width: 0; }  /* a label may be narrower than its control's own width, so a native "Choose file" box cannot push a 320 px screen sideways */
 .exp-row input[type="file"] { max-width: 100%; min-width: 0; }
+
+/* ------------------------------------------------------------ Phase BN: luxury finish (owner, 2026-11-12; samples evidence/phase_bn/samples) */
+h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
+.panel { padding: 26px 28px; }
+:root[data-theme="light"] .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+}
+:root:not([data-theme]) .panel, :root[data-theme="dark"] .panel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
+:root[data-theme="graphite"] h1, :root[data-theme="graphite"] h2, :root[data-theme="graphite"] h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
+button, .button { transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
+button:active, .button:active { transform: scale(.98); }
+input, select, textarea { transition: border-color .14s ease, box-shadow .14s ease; }
+.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); }
+.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }

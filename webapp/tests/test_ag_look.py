@@ -69,7 +69,11 @@ class TheLook(unittest.TestCase):
 
 
 class TheThreeLooks(unittest.TestCase):
-    """Re-written in Phase BA (owner, 2026-10-25, samples in evidence/phase_az/prototype): the three looks are Tide (light),
+    """Re-pinned in Phase BN (owner, 2026-11-12: "change Tide with A and Night with B and add C as a fourth theme"; samples in evidence/phase_bn/samples):
+    Tide became Atelier (light), Night watch became Lacquer (dark, the default), Platinum (graphite) was added, Drafting table stays. The cookie values
+    light, dark and draft keep their meaning; graphite is new. The tokens below are the new looks' measured ones (evidence/phase_ba/contrast.py: 0 failures).
+
+    Re-written in Phase BA (owner, 2026-10-25, samples in evidence/phase_az/prototype): the three looks are Tide (light),
     Night watch (dark, the default) and Drafting table (draft). It replaces the Phase AG trio (Graphite night, its day
     version and Deep ocean). The cookie values are light, dark and draft; an old "ocean" cookie is ignored. The status colours
     do not change."""
@@ -86,14 +90,20 @@ class TheThreeLooks(unittest.TestCase):
 
     def test_the_tokens(self):
         night = self.block(":root")
-        self.assertIn("--night: #080F1E;", night)
-        self.assertIn("--console: #0F1A31;", night)
+        self.assertIn("--night: #0A0D13;", night)  # Lacquer
+        self.assertIn("--console: #121722;", night)
+        self.assertIn("--hi: #D9C39A;", night)  # champagne marks what is picked
         self.assertIn("color-scheme: dark;", night)
-        self.assertIn("--night: #E8EFF6;", self.block(':root[data-theme="light"]'))
+        self.assertIn("--night: #F3F4F6;", self.block(':root[data-theme="light"]'))  # Atelier
+        self.assertIn("--hi: #7A5A1E;", self.block(':root[data-theme="light"]'))  # brass
+        graphite = self.block(':root[data-theme="graphite"]')  # Platinum
+        self.assertIn("--night: #16171A;", graphite)
+        self.assertIn("color-scheme: dark;", graphite)
         draft = self.block(':root[data-theme="draft"]')
         self.assertIn("--night: #F1F3EE;", draft)  # the sheet; the field around it is --page-field
         self.assertIn("--hi: #D7F25A;", draft)  # the marker colour, which never means a status
         self.assertIn("color-scheme: light;", draft)
+        self.assertNotIn("--covered:", graphite)  # Platinum takes the dark set's status colours from :root
         for look in (':root[data-theme="light"]', ':root[data-theme="draft"]'):
             self.assertIn("--covered: #06A496;", self.block(look))  # the light looks share the measured status set
 
@@ -101,7 +111,7 @@ class TheThreeLooks(unittest.TestCase):
         from webapp.tests.test_runs import token
         client = sign_in(self.app, "omar", "Owner-pass-123")
         page = client.get("/").get_data(as_text=True)
-        for value, name in (("light", "Tide"), ("dark", "Night watch"), ("draft", "Drafting table")):
+        for value, name in (("light", "Atelier"), ("dark", "Lacquer"), ("draft", "Drafting table"), ("graphite", "Platinum")):
             self.assertIn(f'name="theme" value="{value}" data-look="{value}" aria-pressed="false">{name}</button>', page)
         got = client.post("/theme", data={"csrf_token": token(client), "theme": "draft", "next": "/"})
         self.assertIn("theme=draft", got.headers["Set-Cookie"])
@@ -110,7 +120,16 @@ class TheThreeLooks(unittest.TestCase):
         self.assertIn('<meta name="theme-color" content="#1B2321">', page)
         self.assertIn('<meta name="color-scheme" content="light">', page)
         self.assertIn('value="draft" data-look="draft" aria-pressed="true">Drafting table</button>', page)
-        self.assertIn('value="light" data-look="light" aria-pressed="false">Tide</button>', page)
+        self.assertIn('value="light" data-look="light" aria-pressed="false">Atelier</button>', page)
+
+    def test_platinum_can_be_picked(self):
+        from webapp.tests.test_runs import token
+        client = sign_in(self.app, "omar", "Owner-pass-123")
+        got = client.post("/theme", data={"csrf_token": token(client), "theme": "graphite", "next": "/"})
+        self.assertIn("theme=graphite", got.headers["Set-Cookie"])
+        page = client.get("/").get_data(as_text=True)
+        self.assertIn('<html lang="en" data-theme="graphite">', page)
+        self.assertIn('value="graphite" data-look="graphite" aria-pressed="true">Platinum</button>', page)
 
     def test_an_old_ocean_cookie_is_ignored(self):
         client = sign_in(self.app, "omar", "Owner-pass-123")

@@ -13,7 +13,8 @@ def block(opener):
             return css[i + 1:j]
 def toks(b): return {k[2:]: v.upper() for k, v in re.findall(r"(--[\w-]+)\s*:\s*(#[0-9A-Fa-f]{6})\b", b)}
 root = toks(block(":root {"))
-LOOKS = {"Night watch": root, "Tide": {**root, **toks(block(':root[data-theme="light"] {'))}, "Drafting table": {**root, **toks(block(':root[data-theme="draft"] {'))}}
+LOOKS = {"Lacquer (dark, default)": root, "Atelier (light)": {**root, **toks(block(':root[data-theme="light"] {'))}, "Drafting table": {**root, **toks(block(':root[data-theme="draft"] {'))},
+         "Platinum (graphite)": {**root, **toks(block(':root[data-theme="graphite"] {'))}}  # Phase BN: Tide became Atelier, Night watch Lacquer, Platinum added
 def lum(h):
     r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)); f = lambda c: c / 12.92 if c <= .03928 else ((c + .055) / 1.055) ** 2.4
     return .2126 * f(r) + .7152 * f(g) + .0722 * f(b)

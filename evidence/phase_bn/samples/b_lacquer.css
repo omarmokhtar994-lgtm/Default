@@ -1,0 +1,11 @@
+/* Look B, "Lacquer" (dark): blue-black lacquer, panels with a lit top edge and a deep shadow, soft white ink, champagne for what is picked. */
+html:root:root {
+  --night: #0A0D13; --rail-bg: #07090E; --console: #121722; --console-2: #171D2A; --rail: #242B3B; --paper: #EEF1F6; --dim: #9CA7BA;
+  --action: #EEF1F6; --action-hover: #FFFFFF; --on-action: #0A0D13; --edge: #5B6781; --selected: #1C2231; --hi: #D9C39A; --on-hi: #17130A;
+  --panel: #121722; --header: rgba(10, 13, 19, .94); --well: rgba(7, 9, 14, .7); --hover: rgba(238, 241, 246, .055); --shadow: rgba(0, 0, 0, .55);
+  --empty-cell: rgba(36, 43, 59, .6); --empty-key: #242B3B; --code-bg: #07090E; --r-panel: 16px; --r-ctl: 9px; --bg-line: transparent;
+  --page-bg: radial-gradient(1100px 520px at 88% -8%, rgba(217, 195, 154, .08), transparent 60%), radial-gradient(900px 480px at -6% 0%, rgba(86, 110, 170, .10), transparent 55%); --page-field: #0A0D13; --h0: #171D2A;
+}
+.panel { border: 1px solid #242B3B; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
+h1, h2, h3 { font-stretch: 104%; }
+button.primary, .button.primary { background: linear-gradient(#F4F6FA, #DDE2EA); border-color: #F4F6FA; box-shadow: 0 8px 18px -8px rgba(0, 0, 0, .8); }

@@ -271,6 +271,7 @@
     <p class="tile"><span class="tile-label">Tightest interval</span><b>{{ pr.after.tightest|hmm }}</b><small class="dim">now {{ pr.before.tightest|hmm }}</small></p>
     <p class="tile"><span class="tile-label">Hours short</span><b>{{ pr.after.short_hours|num }} h</b><small class="dim">now {{ pr.before.short_hours|num }} h</small></p>
     {% if pr.after.safe is defined %}<p class="tile"><span class="tile-label">10 minutes over the target</span><b>{{ pr.after.safe }}</b><small class="dim">now {{ pr.before.safe }}; at 100% counts too</small></p>{% endif %}
+    {% if pr.by is defined %}<p class="tile"><span class="tile-label">Search used</span><b>{{ 'Exact' if pr.by == 'exact' else 'Quick' }}</b><small class="dim">{{ 'looked for the best answer; nothing is given up' if pr.by == 'exact' else 'the fast search; the exact one found nothing better' }}</small></p>{% endif %}
     <p class="tile"><span class="tile-label">Breaks to move</span><b>{{ pr.moves|length }}</b><small class="dim">{{ ('already as good as a fresh plan' if fresh else 'nothing better within the rules') if not pr.moves else 'one click keeps them all' }}</small></p>
   </section>
   {% if pr.moves %}

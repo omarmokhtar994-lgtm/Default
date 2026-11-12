@@ -99,6 +99,14 @@ class ThePage(ots._Overtime):
         self.assertNotIn("Rescue the day, Fix breaks and Change several breaks work on the schedule's day", body)
 
 
+    def test_the_preview_says_which_search_made_the_proposal(self):
+        # Phase BN (easier break tools): the proposal's `by` (exact or greedy, Phase BO) is shown before anything is applied
+        import html
+        url = f"/day?program={self.key.replace(' ', '+')}&date=2026-10-14&tz=Africa/Cairo&start=07:00&view=replan"
+        body = html.unescape(self.client.get(url).get_data(as_text=True))
+        self.assertRegex(body, r'Search used</span><b>(Exact|Quick)</b>')
+
+
 class TheApply(unittest.TestCase):
     """The AE/AR B2B week (with breaks), served as the website serves it."""
 

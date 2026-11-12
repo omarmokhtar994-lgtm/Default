@@ -63,7 +63,7 @@ def allowance(lost: List[Dict[str, Any]]) -> int:
 
 def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Optional[int], may_give_up: int,
           seconds: float = SECONDS,
-          defaults: Optional[Callable[[str, int, int], Tuple[int, int]]] = None) -> Dict[str, Any]:
+          defaults: Optional[Callable[[str, int, int], Tuple[int, int]]] = None, lift_worst: bool = False) -> Dict[str, Any]:
     """Moves {name, idx, kind, minutes, from, to}, the intervals given up (their minutes), and a status: "rescued",
     "no gain" (nothing more reaches the target within the rules) or "not solved" (no answer in the time); with the
     solver's status in ``solver`` (OPTIMAL proves it the best; FEASIBLE is the best found in the time). ``now`` is
@@ -72,7 +72,11 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     ``defaults`` (Phase AX, owner: "prioritize the default, followed by the engine", the intervals first, a sacrifice "to the
     nearest") is ``(name, break index, start) -> (minutes the start is off the usual shape, minutes it is off the engine's
     margin and window for that break)``. After the intervals and the fewest given up come the fewest minutes off the shape,
-    then the fewest off the engine's rules, then the fewest breaks moved."""
+    then the fewest off the engine's rules, then the fewest breaks moved.
+
+    ``lift_worst`` (Phase BO, owner: "count of intervals at target and worst intervals, try to balance both"): after the most intervals at the
+    target, and before the rest, the worst interval's share of its demand (in thousandths, no higher than the target) is lifted as far as it goes.
+    ``before_worst`` and ``after_worst`` report it."""
     started = time.time()
     step = view["interval"]
     per = step // STEP
@@ -139,6 +143,12 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
     at_vars, given, base_at, before_at = [], [], 0, 0
     safe_vars, base_safe, before_safe = [], 0, 0
     flag_hint: Dict[Any, int] = {}
+    top_share = int(target * 1000)  # the worst interval's share in thousandths: lifting it past the target buys nothing
+    shares: List[Tuple[Any, int]] = []  # (the interval's floor variable, its demand in person-ticks x 100)
+    fixed_worst = before_worst = top_share
+
+    def share_of(ticks_on: int, demand: int) -> int:
+        return min(top_share, ticks_on * 100000 // demand)
     for i, c in enumerate(cells):
         if c["required"] <= 0 or over(c["t"]):
             continue
@@ -148,15 +158,19 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         safe = safe_least(per, target, c["required"], step)
         before_at += before >= need
         before_safe += before >= safe
+        demand = max(1, int(round(per * c["required"] * 100)))
+        before_worst = min(before_worst, share_of(before, demand))
         row = away.get(i)
         if not row:
             base_at += before >= need
             base_safe += before >= safe
+            fixed_worst = min(fixed_worst, share_of(before, demand))  # no break can reach it: it caps the worst as it is
             continue
         top = sum(base[k] for k in ticks)
         f = m.NewIntVar(max(0, top - worst[i]), top, f"floor{i}")
         m.Add(f == top - cp_model.LinearExpr.WeightedSum(list(row), list(row.values())))
         flag_hint[f] = before
+        shares.append((f, demand))
         m.Add(f >= min(before, half))  # never below 50% (or below where it is now, if lower)
         if min(before, need) > min(before, half):  # giving it up allows something
             gone = m.NewBoolVar(f"gone{i}")
@@ -285,13 +299,14 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
 
     out: Dict[str, Any] = {"moves": [], "given_up": [], "status": "no gain", "before_at": before_at,
                            "after_at": before_at, "before_safe": before_safe, "after_safe": before_safe,
-                           "moving": len(moving), "solver": ""}
+                           "moving": len(moving), "solver": "", "before_worst": before_worst, "after_worst": before_worst}
 
     def done(**more):
         out.update(more, seconds=round(time.time() - started, 1))
         return out
 
-    if not at_vars and not safe_vars:
+    lifting = lift_worst and bool(shares) and before_worst < fixed_worst
+    if not at_vars and not safe_vars and not lifting:
         return done()
     # the most at the target, then the most with 10 minutes to spare, the fewest given up, the fewest breaks moved, and
     # among those the least moving (in 5-minute steps): each weight is larger than everything after it can add up to,
@@ -324,15 +339,26 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
             + sum(per_move * (1 - x[j][item[2]["start"]]) + sum(d * x[j][s] for s, d in steps[j].items() if d)
                   for j, item in enumerate(moving)))
     per_safe = 1 + per_given * (len(given) + 1)
-    per_at = 1 + per_safe * (len(safe_vars) + 1)
+    per_worst = 1 + per_safe * (len(safe_vars) + 1)
+    per_at = (1 + per_worst * (fixed_worst + 1)) if lifting else per_worst
+    lifted: Any = 0
+    if lifting:
+        lifted = m.NewIntVar(0, fixed_worst, "worst")
+        for f, demand in shares:
+            m.Add(lifted * demand <= 100000 * f)
+        flag_hint[lifted] = before_worst
     hint()
-    m.Minimize(rest - per_safe * sum(safe_vars) - per_at * sum(at_vars))  # the most at the target above all the rest
+    # the most at the target above all the rest; with ``lift_worst`` the worst interval's share next
+    m.Minimize(rest - per_safe * sum(safe_vars) - (per_worst * lifted if lifting else 0) - per_at * sum(at_vars))
     solver, status = run(seconds)
     out["solver"] = solver.StatusName(status)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return done(status="not solved")
-    if (base_at + sum(solver.Value(a) for a in at_vars), base_safe + sum(solver.Value(v) for v in safe_vars)) \
-            <= (before_at, before_safe):
+    found = (base_at + sum(solver.Value(a) for a in at_vars), base_safe + sum(solver.Value(v) for v in safe_vars))
+    if lifting:
+        if (found[0], solver.Value(lifted), found[1]) <= (before_at, before_worst, before_safe):
+            return done()
+    elif found <= (before_at, before_safe):
         return done()
     to = {}
     for j, (lane, seg, b, places) in enumerate(moving):
@@ -346,12 +372,14 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         for k in cover(seg, to[j], b["minutes"]):
             final[k] -= 1
     after_at, after_safe, given_up = base_at, base_safe, []
+    after_worst = fixed_worst
     for i, c in enumerate(cells):
         if c["required"] <= 0 or over(c["t"]):
             continue
         ticks = range(i * per, (i + 1) * per)
         if i not in away:
             continue
+        after_worst = min(after_worst, share_of(sum(final[k] for k in ticks), max(1, int(round(per * c["required"] * 100)))))
         before = sum(slots[k] for k in ticks)
         need = least(per, target, c["required"])
         f = sum(final[k] for k in ticks)
@@ -359,4 +387,4 @@ def solve(view: Dict[str, Any], inputs: Dict[str, Any], target: float, now: Opti
         after_safe += f >= safe_least(per, target, c["required"], step)
         if f < min(before, need):
             given_up.append(c["t"])
-    return done(status="rescued", given_up=given_up, after_at=after_at, after_safe=after_safe)
+    return done(status="rescued", given_up=given_up, after_at=after_at, after_safe=after_safe, after_worst=after_worst)

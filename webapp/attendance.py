@@ -1942,8 +1942,40 @@ class DayBook:
     def replan(self, page: Dict[str, Any], now: int = 0) -> Dict[str, Any]:
         """The autopilot's proposal for the breaks not yet started (nothing is kept); with the week's target, it keeps
         the most intervals 10 minutes over it (Phase AH)."""
-        return replan(page["view"], page["inputs"], now, target=page["target"]["target"],
-                      fit=self.fit_for(page["version"]["program"], page["date"], 0, page["view"]))
+        program, on = page["version"]["program"], page["date"]
+        greedy = replan(page["view"], page["inputs"], now, target=page["target"]["target"],
+                        fit=self.fit_for(program, on, 0, page["view"]))
+        return self._fix_exact(program, on, 0, page, page["view"], now, greedy)
+
+    def _fix_exact(self, program: str, on: date, start: int, page: Dict[str, Any], view: Dict[str, Any], now: int,
+                   greedy: Dict[str, Any]) -> Dict[str, Any]:
+        """Phase BO (owner, 2026-11-12: "count of intervals at target and worst intervals, try to balance both"; measured in
+        evidence/phase_bo/FIX_EXACT_AB.md): Fix rest of the day asks the exact solver first, with nothing given up and the worst interval
+        lifted. Its answer is kept when the page's own count confirms it (no fewer intervals at the target than now, the worst interval no
+        lower); otherwise the greedy answer stands, as before. ``by`` says which search made the proposal; the figures keep their shape."""
+        from .rescue import solve
+        target = page["target"]["target"]
+        if view["measure"] != "interval" or target is None:
+            return {**greedy, "by": "greedy"}
+        try:
+            found = solve(view, page["inputs"], target, now or None, 0, defaults=self.defaults_for(program, on, start, view),
+                          lift_worst=True)
+        except (RuntimeError, ValueError):
+            logging.getLogger(__name__).exception("fix rest of the day: the exact search failed for %s on %s; the greedy answer is used", program, on)
+            return {**greedy, "by": "greedy"}
+        if found["status"] != "rescued" or not found["moves"]:
+            return {**greedy, "by": "greedy"}
+        moves = self._dated(found["moves"], view, on, start) if start else [dict(m) for m in found["moves"]]
+        after = self._recount(program, on, start, [(m["name"], m["idx"], m.get("day_to", m["to"]), m.get("date", on)) for m in moves])
+
+        def worst(cells: List[Dict[str, Any]]) -> float:
+            return min((min(c["now"] / c["required"], target) for c in cells if c["required"] > 0), default=0.0)
+
+        if after["target"]["now"] < page["target"]["now"] or worst(after["view"]["cells"]) < worst(page["view"]["cells"]) - 1e-9:
+            return {**greedy, "by": "greedy"}
+        scored = rebase(after["view"], start, after["views"]) if start else after["view"]
+        figures = replan(scored, page["inputs"], now, rounds=0, target=target)["before"]
+        return {"moves": moves, "before": greedy["before"], "after": figures, "by": "exact", "solver": found["solver"]}
 
     def _window(self, program: str, on: date, start: int, measure: str = "interval",
                 extras: Optional[Dict[date, Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -1974,9 +2006,15 @@ class DayBook:
         started): the moves in the window's minutes, each with its shift's date."""
         page = self._window(program, on, start, measure)
         view = rebase(page["view"], start, page["views"])
-        found = replan(view, page["inputs"], max(now - start, 0) if now else 0, target=page["target"]["target"],
-                       fit=self.fit_for(program, on, start, view))
-        return {**found, "moves": self._dated(found["moves"], view, on, start)}
+        rel = max(now - start, 0) if now else 0
+        found = replan(view, page["inputs"], rel, target=page["target"]["target"], fit=self.fit_for(program, on, start, view))
+        greedy = {**found, "moves": self._dated(found["moves"], view, on, start)}
+        if not start:  # the plain day: the moves carry their date the same way
+            exact = self._fix_exact(program, on, 0, page, view, rel, greedy)
+            if exact["by"] == "exact":
+                exact["moves"] = self._dated(exact["moves"], view, on, 0)
+            return exact
+        return self._fix_exact(program, on, start, page, view, rel, greedy)
 
     def _default_words(self, program: str, on: date, view: Dict[str, Any], name: str, idx: int, at: int,
                        gaps: bool = False) -> List[str]:

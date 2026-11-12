@@ -46,3 +46,12 @@ Amendment before the third toy was run (2026-11-12, after the first two after-ar
   before-arm also has no candidate for, the after-arm publishes a PREFERENCE_CANDIDATE that honours more requests, validated PASS, with every
   coverage count inside floor(2%) and no gap count higher. If the selected schedule already honours everything, toy 3 proves nothing either
   and the result is reported as such, not as a pass.
+
+Second amendment, before toy 4 was run (2026-11-12)
+- Toy 3 result: both arms' selected schedules honour 58 of 60 and miss the same two requests; neither arm has a candidate. The after-arm tried
+  both and its record says why they were refused: one by a row or cell rule; the other would open a severe floor gap (only two people cover
+  each shift, so one person an hour later leaves that hour at 50%, under the 80% floor). The rule never allows a new gap, so this is the rule
+  working, and toys 2 and 3 are too thin (two people per shift) to test the allowance. The pre-registered pass is NOT met on toy 3.
+- Toy 4, written before it is run: the same staircase with six people per shift (36 people, demand six per shift), each asks the shift of
+  their group all week, and three people ask one hour later on Wednesday. One person away leaves an edge hour at 5 of 6 (83%, above the
+  floor). Arms and pass condition as for toy 3. If it is not met, Phase BP's engine step is not shipped.

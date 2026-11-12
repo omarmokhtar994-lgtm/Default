@@ -189,10 +189,27 @@ class ScheduleBook:
         figures in its checks. Offered only: it is never set in use here. None while the run has no versions."""
         return self._ensure_alternative(run, source, "tool_consistent", "Tool, more consistent", "consistency", consistency)
 
-    def ensure_preference(self, run: Dict[str, Any], source: Path, preference: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def ensure_preference(self, run: Dict[str, Any], source: Path, preference: Dict[str, Any],
+                          use: bool = False) -> Optional[Dict[str, Any]]:
         """Phase BG: the week swapped toward Preference shifts (PREFERENCE_CANDIDATE), kept once as "Tool, closer to
-        preferences" under the same rule: offered only, with the engine's swap figures in its checks."""
-        return self._ensure_alternative(run, source, "tool_preference", "Tool, closer to preferences", "preference", preference)
+        preferences" under the same rule, with the engine's swap figures in its checks.
+
+        Phase BP (owner, 2026-11-12: it should go in use by itself): with ``use``, a version kept just now is set in use when
+        no version of that program and week is in use, so it never replaces one a person chose."""
+        had = any(v["kind"] == "tool_preference" for v in self.store.list_schedules(run_id=run["id"]))
+        kept = self._ensure_alternative(run, source, "tool_preference", "Tool, closer to preferences", "preference", preference)
+        if not use or had or kept is None:
+            return kept
+        with self._lock(run["id"]):
+            scope = (self.store.list_schedules(program=kept["program"], week_start=kept["week_start"])
+                     if kept["program"] and kept["week_start"] else self.store.list_schedules(run_id=run["id"]))
+            if any(v["in_use"] for v in scope):
+                return kept
+            self.store.update_schedule(kept["id"], in_use=1)
+            self.store.add_event(kind="set_in_use", user_id=run.get("user_id"), program=kept["program"], week_start=kept["week_start"],
+                                 run_id=run["id"], schedule_id=kept["id"], subject=kept["label"],
+                                 detail="by itself: the run's preference version, nothing else was in use")
+        return self.store.get_schedule(kept["id"])
 
     def _ensure_alternative(self, run: Dict[str, Any], source: Path, kind: str, label: str, key: str,
                             figures: Dict[str, Any]) -> Optional[Dict[str, Any]]:

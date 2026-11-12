@@ -531,6 +531,19 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Phase BP (owner, 2026-11-12): shift Preferences with a coverage allowance; three navigation items
+
+- **Engine:** `preference_swap_polish` also moves one person to the asked shift: free moves first, then moves inside `PREFERENCE_COVERAGE_ALLOWANCE` (0.02, the
+  owner's maximum) of each coverage count of the selected schedule; no gap count may rise. The selected schedule is never rewritten; the result is
+  `PREFERENCE_CANDIDATE`, and its audit record says the cost and which measure refused each move. Rule and A/B: `evidence/phase_bp`.
+- **Runner:** `preference_coverage_verdict` re-checks the allowance on the independent validator's numbers (never above 2%); the outcome text says the cost.
+- **Website:** the version "Tool, closer to preferences" says what it costs. A run that just finished puts it in use by itself when no version of that week
+  is in use (owner: "yes"); it never replaces a version a person chose, and versions added to old runs at start stay offered only.
+- **Open (measured, not fixed):** when a run is short of time the schedule comes from the `deterministic_target_baseline` skeleton, which weighs Preferences
+  least (144 of 180 honoured against 177); the preference step got 1 s at the end of a 300 s run. See `evidence/phase_bp/PREFERENCE_AB.md`.
+- **Navigation:** account menu in the top bar (`details.acct`), the menu link People reads Accounts, and People, Weeks and Schedules start with links to
+  their own sections (made in `app.js` from the headings on the page).
+
 ## Phase BN and BO (owner, 2026-11-12): four looks, regrouped menu, better break tools
 
 - **Looks (BN-1):** Atelier (light, was Tide), Lacquer (dark, default, was Night watch), Drafting table, Platinum (new, cookie `graphite`). `light` and `dark`
@@ -538,7 +551,7 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
   Look tests were re-pinned with the reason in each (test_ag_look, test_markup_xy, test_runs).
 - **Menu (BN-2):** groups are Today, Plan (Weeks, Schedules, Volumes), Requests (Leave and swaps, Coaching), Reports, People, Admin. Labels and URLs are
   unchanged. Not built from the sample (`evidence/phase_bn/nav`): the account menu and in-page jump tabs; renaming People to Accounts was left out so no page
-  label changes. They are open for the owner.
+  label changes. Built later the same day (see Phase BP).
 - **Break tools (BO):** Fix rest of the day asks the exact solver first with the worst interval lifted (`rescue.solve(lift_worst=True)`, `DayBook._fix_exact`), A/B in
   `evidence/phase_bo/FIX_EXACT_AB.md`; channel planning: measured, no change (`CHANNEL_SPEED.md`). The preview shows which search made the proposal (BN-3).
 

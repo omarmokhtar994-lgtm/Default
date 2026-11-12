@@ -180,7 +180,7 @@ class RunQueue:
                     return found[0], kept
         return None
 
-    def keep_schedules(self, run_id: str) -> None:
+    def keep_schedules(self, run_id: str, fresh: bool = False) -> None:
         """Copy the run's schedules in as versions (Phase N; Phase AL: and the steadier week the engine passed); a
         failure here never fails the run."""
         if self.schedules is None:
@@ -192,7 +192,7 @@ class RunQueue:
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's schedules as versions: {exc!r}\n")
         self._keep_consistent(run_id)
-        self._keep_preference(run_id)
+        self._keep_preference(run_id, use=fresh)  # Phase BP: only a run that just finished puts its preference version in use by itself
         self._kept(run_id)
 
     def _kept(self, run_id: str) -> None:
@@ -215,12 +215,13 @@ class RunQueue:
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's more consistent schedule: {exc!r}\n")
 
-    def _keep_preference(self, run_id: str) -> None:
-        """The week swapped toward Preference shifts as a version, on its own (as the steadier week)."""
+    def _keep_preference(self, run_id: str, use: bool = False) -> None:
+        """The week swapped toward Preference shifts as a version, on its own (as the steadier week). ``use``: see
+        ``ScheduleBook.ensure_preference``; versions added to old runs at start stay offered only."""
         try:
             swapped = self.preference_schedule(run_id)
             if swapped is not None:
-                self.schedules.ensure_preference(self.store.get_run(run_id), *swapped)
+                self.schedules.ensure_preference(self.store.get_run(run_id), *swapped, use=use)
         except Exception as exc:  # the run's own files stay authoritative; say why the copy failed
             with self.log_path(run_id).open("a", encoding="utf-8") as log:
                 log.write(f"\n(website) could not keep this run's preference schedule: {exc!r}\n")
@@ -468,7 +469,7 @@ class RunQueue:
         if status in ("DONE", "REVIEW") and run["mode"] != "SMOKE":
             # before the status says finished: a finished run's work is over (clean-up may follow at once)
             self.store.update_run(run_id, message="Keeping the schedules as versions.")
-            self.keep_schedules(run_id)
+            self.keep_schedules(run_id, fresh=True)
         if status in ("DONE", "REVIEW"):
             try:
                 self._slim_and_zip(run_id)  # after the schedules are kept: nothing below needs the working files

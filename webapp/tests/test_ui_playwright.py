@@ -164,7 +164,7 @@ class InTheBrowser(unittest.TestCase):
         page.mouse.move(0, 0)
         page.wait_for_timeout(800)
         page.screenshot(path=str(L_SCREENS / "light_home.png"), full_page=True)
-        page.get_by_role("button", name="Night watch").click()
+        page.get_by_role("button", name="Lacquer").click()  # re-pinned in Phase BN: Night watch became Lacquer
         expect(page.locator("html")).to_have_attribute("data-theme", "dark")
 
     def drop(self, page, name, data=b"PK\x03\x04 dropped"):

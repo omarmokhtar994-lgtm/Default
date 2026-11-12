@@ -531,6 +531,17 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Phase BN and BO (owner, 2026-11-12): four looks, regrouped menu, better break tools
+
+- **Looks (BN-1):** Atelier (light, was Tide), Lacquer (dark, default, was Night watch), Drafting table, Platinum (new, cookie `graphite`). `light` and `dark`
+  cookies keep their meaning. Tokens in `webapp/static/app.css`, contrast in `evidence/phase_ba/contrast.py` (0 failures), design notes in `webapp/DESIGN.md` v6.
+  Look tests were re-pinned with the reason in each (test_ag_look, test_markup_xy, test_runs).
+- **Menu (BN-2):** groups are Today, Plan (Weeks, Schedules, Volumes), Requests (Leave and swaps, Coaching), Reports, People, Admin. Labels and URLs are
+  unchanged. Not built from the sample (`evidence/phase_bn/nav`): the account menu and in-page jump tabs; renaming People to Accounts was left out so no page
+  label changes. They are open for the owner.
+- **Break tools (BO):** Fix rest of the day asks the exact solver first with the worst interval lifted (`rescue.solve(lift_worst=True)`, `DayBook._fix_exact`), A/B in
+  `evidence/phase_bo/FIX_EXACT_AB.md`; channel planning: measured, no change (`CHANNEL_SPEED.md`). The preview shows which search made the proposal (BN-3).
+
 ## Security review and hardening (owner, 2026-11-11)
 Verdicts, the deployed patch's identity, the read-only-code design and what is still open: `docs/security/SECURITY_STATUS_2026-11-11.md`; outbound access:
 `docs/security/EGRESS_DESIGN.md`. In this release: the deployed 10-file website patch (ported byte for byte, plus its gaps closed), code owned by root and

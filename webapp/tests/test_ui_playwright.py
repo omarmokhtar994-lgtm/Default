@@ -145,7 +145,7 @@ class InTheBrowser(unittest.TestCase):
         """Phase L: the light look, chosen with the switch in the header."""
         page = self.page(height=1100)
         self.sign_in(page)
-        page.get_by_role("button", name="Tide").click()  # Phase BA: the look control names the three looks
+        page.get_by_role("button", name="Atelier").click()  # Phase BA: the look control names the looks; Phase BN: Tide became Atelier
         expect(page.locator("html")).to_have_attribute("data-theme", "light")
         real = self.workbook.with_name("REAL_light.xlsx")
         real.write_bytes(b"PK\x03\x04 real")
@@ -154,8 +154,9 @@ class InTheBrowser(unittest.TestCase):
         expect(page.locator(".status-word")).to_have_text("Approved", timeout=20000)
         expect(page.locator(".grid.after .cell")).to_have_count(126)
         background = page.evaluate("getComputedStyle(document.body).backgroundColor")
-        # re-pinned in Phase BA: the day look is Tide (owner, 2026-10-25), page #E8EFF6 (was #F1F2F4)
-        self.assertEqual(background, "rgb(232, 239, 246)")
+        # re-pinned in Phase BA: the day look is Tide (owner, 2026-10-25), page #E8EFF6 (was #F1F2F4); re-pinned in Phase BN (owner, 2026-11-12):
+        # the day look is Atelier, page #F3F4F6
+        self.assertEqual(background, "rgb(243, 244, 246)")
         page.wait_for_timeout(800)
         L_SCREENS.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(L_SCREENS / "light_run_page.png"), full_page=True)

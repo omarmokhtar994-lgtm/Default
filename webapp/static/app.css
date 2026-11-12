@@ -1739,6 +1739,7 @@ button.link { border-radius: 0; }
 .tl-modes .look:hover { background: var(--hover); border-color: transparent; }
 .tl-modes .look[aria-pressed="true"] { background: var(--hi); color: var(--on-hi); }
 .looks { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--hover); border: 1px solid var(--rail); }
+@media (max-width: 30rem) { .top .account .looks, .looks { flex-wrap: wrap; justify-content: center; border-radius: 14px; max-width: 100%; } }  /* Phase BN: four looks do not fit one row on a phone */
 @media print { [data-day] .tl-scroll { max-height: none; } }
 
 /* Phase BA: the floor's screen carries the day so far, the target, the next hour's changes, what needs attention, who is out and the channels */
@@ -1848,6 +1849,21 @@ input[type=file] { min-height: 24px; }
 @media (prefers-reduced-motion: reduce) { .deck3d, .mark3d, .flip { animation: none; } .pcard[data-tilt] { transition: none; transform: none; } }
 @media print { .stage3d { display: none; } }
 
+/* ------------------------------------------------------------ Phase BN: luxury finish (owner, 2026-11-12; samples evidence/phase_bn/samples) */
+h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
+@media (min-width: 48rem) { .panel { padding: 26px 28px; } }  /* roomier panels on wide screens only: a phone keeps its width */
+:root[data-theme="light"] .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+}
+:root:not([data-theme]) .panel, :root[data-theme="dark"] .panel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
+:root[data-theme="graphite"] h1, :root[data-theme="graphite"] h2, :root[data-theme="graphite"] h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
+button, .button { transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
+button:active, .button:active { transform: scale(.98); }
+input, select, textarea { transition: border-color .14s ease, box-shadow .14s ease; }
+.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); }
+.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }
+
 /* Phase BB: depth on the figures (owner, 2026-10-25: "build it ... with 0 risk"). Columns and horizontal bars show a lit top and a darker side
    (charts.py draws the two faces; the front face is the value and keeps its exact size). The tile strips and boxes get a raised edge.
    Everything here is still paint (fills and shadows), so it costs the page nothing. A browser without color-mix keeps the plain series colour. */
@@ -1919,17 +1935,3 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .exp-row label { min-width: 0; }  /* a label may be narrower than its control's own width, so a native "Choose file" box cannot push a 320 px screen sideways */
 .exp-row input[type="file"] { max-width: 100%; min-width: 0; }
 
-/* ------------------------------------------------------------ Phase BN: luxury finish (owner, 2026-11-12; samples evidence/phase_bn/samples) */
-h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
-.panel { padding: 26px 28px; }
-:root[data-theme="light"] .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
-}
-:root:not([data-theme]) .panel, :root[data-theme="dark"] .panel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
-:root[data-theme="graphite"] h1, :root[data-theme="graphite"] h2, :root[data-theme="graphite"] h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
-button, .button { transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
-button:active, .button:active { transform: scale(.98); }
-input, select, textarea { transition: border-color .14s ease, box-shadow .14s ease; }
-.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); }
-.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }

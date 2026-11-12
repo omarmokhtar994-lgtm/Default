@@ -35,3 +35,14 @@ Acceptance (A/B: engine before the change against after, same seed 9000, 2 worke
 If any line fails, the change is not shipped.
 
 Not decided here (the owner's): whether the website should put the preference version in use by itself. It stays offered, one click to use.
+
+Amendment before the third toy was run (2026-11-12, after the first two after-arm runs)
+- Toy 1 (all honoured already): after-arm 60 of 60, no candidate. Acceptance line met.
+- Toy 2 (one-day requests three hours from the worked shift): after-arm selected 59 of 60, 0 swaps, 0 moves, no candidate. The missed request
+  costs three hourly intervals, about 4% of the week's, so the rule refuses it. The acceptance line "the candidate honours more requests" is
+  NOT met on this toy; the refusal is what the 2% rule says, so the toy does not test the allowance.
+- Toy 3 is added to test it, written before it is run: the same week, the three one-day requests are one hour from the weekly request. Arms:
+  the engine at the commit before Phase BP, and the engine after. Pass: when the after-arm's selected schedule misses a request that the
+  before-arm also has no candidate for, the after-arm publishes a PREFERENCE_CANDIDATE that honours more requests, validated PASS, with every
+  coverage count inside floor(2%) and no gap count higher. If the selected schedule already honours everything, toy 3 proves nothing either
+  and the result is reported as such, not as a pass.

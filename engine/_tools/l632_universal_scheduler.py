@@ -20580,6 +20580,7 @@ def preference_swap_polish(
 
     # Phase BP: single moves to the asked shift (same length, so the person-day keeps its break pattern).
     by_label = {norm(s.label): s.index for s in shifts}
+    refused: Dict[str, int] = record.setdefault("moves_refused_by", {})
 
     def asked(a: int, d: int) -> Optional[int]:
         assoc = parsed.associates[a]
@@ -20596,6 +20597,7 @@ def preference_swap_polish(
         row = list(rows[a])
         row[d] = target
         if not (_consistency_row_allowed(parsed, a, row) and _consistency_cell_allowed(parsed, a, d, shifts[target])):
+            refused["a row or cell rule"] = refused.get("a row or cell rule", 0) + 1
             return None
         record["trials"] += 1
         trial = [list(r) for r in rows]
@@ -20603,10 +20605,15 @@ def preference_swap_polish(
         trial_skeleton = _consistency_skeleton(parsed, skeleton, trial)
         employee = employee_operational_quality(parsed, trial_skeleton)
         if not _consistency_employee_no_worse(employee, employee_now):
+            refused["employee quality"] = refused.get("employee quality", 0) + 1
             return None
         metrics = calculate_metrics(parsed, trial_skeleton, pattern, solution.patterns)
         cost = preference_allowance_cost(metrics, base_metrics, allowance)
-        return None if cost is None else (trial, trial_skeleton, employee, metrics, cost)
+        if cost is None:  # the audit says which measures refused a move, so "not given" can be explained
+            for key in _consistency_metrics_no_worse(metrics, base_metrics):
+                refused[key] = refused.get(key, 0) + 1
+            return None
+        return (trial, trial_skeleton, employee, metrics, cost)
 
     def candidates() -> List[Tuple[int, int, int]]:
         return [(a, d, t) for a in range(A) for d in range(7) for t in [asked(a, d)] if t is not None]

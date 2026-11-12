@@ -141,6 +141,7 @@ class TheAllowanceIsForTheWholeWeek(unittest.TestCase):
         self.assertEqual(record["moves"], 1)
         self.assertEqual(sorted([new_sk.assignment[0][1], new_sk.assignment[0][2]]), sorted([EARLY, NEXT]))
         self.assertEqual(falls(new_br.metrics, br.metrics).get("before_100"), 1)
+        self.assertGreaterEqual(record["moves_refused_by"].get("before_100", 0), 1)  # the audit says what refused the other day
 
     def test_a_swap_and_a_move_together_stay_inside_it(self):
         # 09:00 is two hours later, but a swap with a 10:00 person first costs nothing and one hour earlier from there costs one interval

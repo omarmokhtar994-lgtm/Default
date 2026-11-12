@@ -1885,11 +1885,12 @@ class TheNewLayout(unittest.TestCase):
         self.assertIn('aria-current="page">RTA</a>', side)
         self.assertIn('<option value="NMG" selected>NMG</option>', side)
         # re-pinned (Phase BN, menu regrouped): "People" is now also a group heading (Team, People, Departments), so the link is matched as a link
-        self.assertNotIn(">People</a>", side)  # planners manage nobody
+        # re-pinned again (Phase BN, owner: "the three nav items built"): that link now reads Accounts
+        self.assertNotIn(">Accounts</a>", side)  # planners manage nobody
         # Phase BN: Coaching had no menu entry; it sits under Requests for those who may ask for it, and the menu names its six groups
         self.assertRegex(side, r'(?s)<p class="navhead">Requests</p>.*?>Leave and swaps.*?<a [^>]*>Coaching</a>')
         side = self.part(self.admin.get("/").get_data(as_text=True), "aside", "leftnav")
-        for words in (">People</a>", ">LOBs and defaults<"):
+        for words in (">Accounts</a>", ">LOBs and defaults<"):
             self.assertIn(words, side)
 
     def test_home_starts_from_my_programs(self):

@@ -22,7 +22,6 @@
   {% if user %}
   <div class="account">
     {% if not user.is_associate %}<button type="button" class="link goto-open" data-goto-open aria-keyshortcuts="Control+K"><span class="ico i-magnifying-glass" aria-hidden="true"></span>Go to <kbd>Ctrl K</kbd></button>{% endif %}
-    <span class="who">{{ user.display_name }}, {{ user_role|lower }}</span>
     <form class="theme" method="post" action="{{ url_for('set_theme') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
@@ -31,8 +30,13 @@
         {% for value, name in (('light', 'Atelier'), ('dark', 'Lacquer'), ('draft', 'Drafting table'), ('graphite', 'Platinum')) %}<button class="look" name="theme" value="{{ value }}" data-look="{{ value }}" aria-pressed="{{ 'true' if theme == value else 'false' }}">{{ name }}</button>{% endfor %}
       </span>
     </form>
-    <a href="{{ url_for('change_password') }}" title="Your account: change your password"><span class="ico i-gear" aria-hidden="true"></span>Settings</a>
-    <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link"><span class="ico i-sign-out" aria-hidden="true"></span>Sign out</button></form>
+    <details class="acct" data-acct>
+      <summary><span class="ico i-user-circle" aria-hidden="true"></span>{{ user.display_name }}, {{ user_role|lower }}</summary>
+      <div class="acct-menu">
+        <a href="{{ url_for('change_password') }}" title="Your account: change your password"><span class="ico i-gear" aria-hidden="true"></span>Settings</a>
+        <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="link"><span class="ico i-sign-out" aria-hidden="true"></span>Sign out</button></form>
+      </div>
+    </details>
   </div>
   {% endif %}
 </header>
@@ -68,7 +72,7 @@
     {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}{% endif %}
     {% if can('team') or can('people') or can('setup') %}<p class="navhead">People</p>
     {% if can('team') %}{{ navlink('team', url_for('team_page'), 'Team') }}{% endif %}
-    {% if can('people') %}{{ navlink('people', url_for('admin_users'), 'People') }}{% endif %}
+    {% if can('people') %}{{ navlink('people', url_for('admin_users'), 'Accounts') }}{% endif %}
     {% if can('setup') %}{{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
     {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}{% endif %}{% endif %}
     {% if user.is_admin %}<p class="navhead">Admin</p>

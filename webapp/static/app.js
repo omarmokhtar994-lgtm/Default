@@ -2131,3 +2131,27 @@ document.addEventListener("change", function (e) {
   }
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", start); } else { start(); }
 })();
+
+// Phase BN (navigation): the account menu in the top bar closes on Escape or a click elsewhere, and the long pages (People, Weeks, Schedules)
+// get a row of links to their own sections, made from the headings that are really on the page.
+(function () {
+  "use strict";
+  var acct = document.querySelector("details[data-acct]");
+  if (acct) {
+    document.addEventListener("click", function (e) { if (acct.open && !acct.contains(e.target)) { acct.open = false; } });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && acct.open) { acct.open = false; acct.querySelector("summary").focus(); }
+    });
+  }
+  var jump = document.querySelector("nav[data-jump]");
+  if (!jump) { return; }
+  var heads = document.querySelectorAll("main section.panel > h2[id]");
+  if (heads.length < 3) { return; }
+  Array.prototype.forEach.call(heads, function (h) {
+    var a = document.createElement("a");
+    a.href = "#" + h.id;
+    a.textContent = h.textContent.replace(/\s+/g, " ").trim().split(":")[0].slice(0, 40);
+    jump.appendChild(a);
+  });
+  jump.hidden = false;
+})();

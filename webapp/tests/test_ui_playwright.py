@@ -272,7 +272,7 @@ class InTheBrowser(unittest.TestCase):
         self.sign_in(page)
         # re-pinned (Phase U): the menu also has "Departments and people", so the People link is matched exactly
         # re-pinned (Phase AU): other headings on the page now contain "people" too, so the heading is matched exactly
-        page.get_by_role("link", name="People", exact=True).click()
+        page.get_by_role("link", name="Accounts", exact=True).click()  # re-pinned (Phase BN): the menu link to People reads Accounts
         expect(page.get_by_role("heading", name="People", exact=True)).to_be_visible()
         page.screenshot(path=str(SCREENS / "08_people.png"), full_page=True)
 
@@ -3001,6 +3001,29 @@ class ThePhaseACInTheBrowser(unittest.TestCase):
         for ratio in lines:
             self.assertLess(ratio, 1.6, lines)  # one line, not two
         page.locator(".tiles").screenshot(path=str(AC_SCREENS / "week_tiles.png"))
+        self.assertEqual(errors, [])
+
+    def test_the_section_links_and_the_account_menu(self):
+        """Phase BN: Weeks starts with links to its own sections, each landing on a heading; the name in the top bar opens Settings and Sign out."""
+        errors = []
+        page = self.page(width=1440, height=900)
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/week?program={self.q}&week={self.sunday.isoformat()}", errors)
+        links = page.locator("nav.jump a")
+        self.assertGreaterEqual(links.count(), 3)
+        for i in range(links.count()):
+            target = links.nth(i).get_attribute("href")
+            self.assertEqual(page.locator(f"h2{target}").count(), 1, target)
+        links.nth(links.count() - 1).click()
+        expect(page.locator("h2" + links.nth(links.count() - 1).get_attribute("href"))).to_be_in_viewport()
+        menu = page.locator("details.acct")
+        expect(menu.get_by_role("button", name="Sign out")).to_be_hidden()
+        menu.locator("summary").click()
+        expect(menu.get_by_role("button", name="Sign out")).to_be_visible()
+        expect(menu.get_by_role("link", name="Settings")).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(menu.get_by_role("button", name="Sign out")).to_be_hidden()
         self.assertEqual(errors, [])
 
     def test_phones_never_scroll_sideways(self):

@@ -5,6 +5,7 @@
   <h1>People</h1>
   <p class="byline">{% if admin %}Admins manage everyone. Supervisors manage the planners, team managers and associates of their own programs.{% else %}You manage the planners, team managers and associates of your programs: their programs, passwords, switched on or off, and each associate's team manager.{% endif %}</p>
 </div></div>
+<nav class="jump" aria-label="On this page" data-jump hidden></nav>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
 {% if made %}<section class="panel" aria-labelledby="made-h" role="status">
   <h2 id="made-h">Temporary password</h2>

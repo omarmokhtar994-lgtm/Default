@@ -2290,7 +2290,9 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
         self.sign_in(page)
         page.goto(self.base + f"/runs/{self.run_id}/schedules")
         page.wait_for_load_state("load")
-        page.evaluate("document.querySelector('header.top .who').textContent ="
+        # Re-pinned (Phase BN, 2026-11-12): the name now sits in the account menu's summary, no longer in a span.who.
+        # The contract measured here is the same: a long name wraps the bar and focus still clears it.
+        page.evaluate("document.querySelector('header.top details.acct > summary').textContent ="
                       " 'Abdelrahman Mohamed Abdelaziz Elsayed Ibrahim, supervisor'")
         page.wait_for_timeout(300)
         self.assertGreater(page.evaluate("document.querySelector('header.top').getBoundingClientRect().height"), 72)
@@ -3019,6 +3021,8 @@ class ThePhaseACInTheBrowser(unittest.TestCase):
         expect(page.locator("h2" + links.nth(links.count() - 1).get_attribute("href"))).to_be_in_viewport()
         menu = page.locator("details.acct")
         expect(menu.get_by_role("button", name="Sign out")).to_be_hidden()
+        # the menu does not make the top bar taller: 56 px on one line, as before it (a 57.19 px bar shifted every page by a fraction)
+        self.assertEqual(page.evaluate("document.querySelector('header.top').getBoundingClientRect().height"), 56)
         menu.locator("summary").click()
         expect(menu.get_by_role("button", name="Sign out")).to_be_visible()
         expect(menu.get_by_role("link", name="Settings")).to_be_visible()

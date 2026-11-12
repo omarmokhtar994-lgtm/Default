@@ -819,7 +819,6 @@ body.wall { background: var(--night); color: var(--paper); padding: 2vh 2.5vw; m
 /* Phase Q: the slim top bar and the left menu */
 .top .account { display: flex; align-items: center; gap: 6px 18px; margin-left: auto; white-space: nowrap; }
 @media (max-width: 720px) { .top .account { flex-wrap: wrap; white-space: normal; } }
-.top .account .who { color: var(--dim); }
 .top .account a, .top .account .link { color: var(--paper); }
 .frame { display: grid; grid-template-columns: 236px minmax(0, 1fr); align-items: start; flex: 1; }
 .frame > main { margin: 0; max-width: 1240px; min-width: 0; }
@@ -1793,6 +1792,38 @@ input[type=file] { min-height: 24px; }
 /* the visually hidden labels inside a scroll panel stay inside it (an absolutely placed label of a clipped box otherwise lengthens the page) */
 .rb-scroll.panel-scroll, .tscroll.panel-scroll, [data-day] .tl-scroll { position: relative; }
 
+/* ------------------------------------------------------------ Phase BN: luxury finish (owner, 2026-11-12; samples evidence/phase_bn/samples) */
+h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
+@media (min-width: 48rem) { .panel { padding: 26px 28px; } }  /* roomier panels on wide screens only: a phone keeps its width */
+:root[data-theme="light"] .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+}
+:root:not([data-theme]) .panel, :root[data-theme="dark"] .panel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
+:root[data-theme="graphite"] h1, :root[data-theme="graphite"] h2, :root[data-theme="graphite"] h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
+button, .button { transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
+button:active, .button:active { transform: scale(.98); }
+input, select, textarea { transition: border-color .14s ease, box-shadow .14s ease; }
+.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); }
+.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }
+
+/* Phase BN (navigation): one account menu in the top bar, and a row of links to a long page's own sections */
+.top .account .acct { position: relative; }
+.top .account .acct > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; box-sizing: border-box; min-height: 31px; padding: 0 10px;  /* 31 px on one line: the top bar keeps its 56 px */ border-radius: var(--r-ctl); color: var(--paper); }
+.top .account .acct > summary::-webkit-details-marker { display: none; }
+.top .account .acct > summary::after { content: ""; width: 6px; height: 6px; margin-left: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; rotate: 45deg; translate: 0 -2px; opacity: .7; }
+.top .account .acct > summary:hover, .top .account .acct[open] > summary { background: var(--hover); }
+.top .account .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 12rem; display: grid; gap: 2px; padding: 6px; border-radius: var(--r-ctl); background: var(--console); border: 1px solid var(--rail); box-shadow: 0 12px 28px -12px rgba(0, 0, 0, .45); }
+.top .account .acct-menu a, .top .account .acct-menu .link { width: 100%; padding: 8px 10px; border-radius: 6px; text-align: left; text-decoration: none; justify-content: flex-start; min-height: 2.5rem; }
+.top .account .acct-menu a:hover, .top .account .acct-menu .link:hover { background: var(--hover); }
+.top .account .acct-menu form { margin: 0; }
+.jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.jump[hidden] { display: none; }
+.jump a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rail); color: var(--paper); text-decoration: none; font-size: .875rem; }
+.jump a:hover { background: var(--hover); }
+main section.panel { scroll-margin-top: 72px; }
+@media print { .jump, .top .account .acct { display: none; } }
+
 /* Phase BA: a little 3D (owner, 2026-10-25: "go for what you suggested"). CSS only, inside a speed budget: no filter or blur, three
    animations at most, all off for reduced motion, still when the tab is hidden or the stack is off screen. Never on the RTA, tables, forms
    or the wallboard. Measured: evidence/phase_ba/max3d (about 23 extra layers, 5 ms of CPU in 6 s). */
@@ -1848,38 +1879,6 @@ input[type=file] { min-height: 24px; }
 @media (max-width: 40rem) { .blocks3d { gap: .4rem; padding: 0; } .blk { width: 1.3rem; margin-right: .5rem; } .blk::before { height: .5rem; } .blk::after { width: .5rem; } .stage3d { margin-top: 2rem; height: 15rem; } .deck3d { height: 10rem; } }
 @media (prefers-reduced-motion: reduce) { .deck3d, .mark3d, .flip { animation: none; } .pcard[data-tilt] { transition: none; transform: none; } }
 @media print { .stage3d { display: none; } }
-
-/* ------------------------------------------------------------ Phase BN: luxury finish (owner, 2026-11-12; samples evidence/phase_bn/samples) */
-h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
-@media (min-width: 48rem) { .panel { padding: 26px 28px; } }  /* roomier panels on wide screens only: a phone keeps its width */
-:root[data-theme="light"] .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="draft"]):not([data-theme="graphite"]) .panel { border-color: transparent; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
-}
-:root:not([data-theme]) .panel, :root[data-theme="dark"] .panel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 18px 40px -18px rgba(0, 0, 0, .7); }
-:root[data-theme="graphite"] h1, :root[data-theme="graphite"] h2, :root[data-theme="graphite"] h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
-button, .button { transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
-button:active, .button:active { transform: scale(.98); }
-input, select, textarea { transition: border-color .14s ease, box-shadow .14s ease; }
-.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); }
-.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }
-
-/* Phase BN (navigation): one account menu in the top bar, and a row of links to a long page's own sections */
-.top .account .acct { position: relative; }
-.top .account .acct > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-ctl); color: var(--paper); }
-.top .account .acct > summary::-webkit-details-marker { display: none; }
-.top .account .acct > summary::after { content: ""; width: 6px; height: 6px; margin-left: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; rotate: 45deg; translate: 0 -2px; opacity: .7; }
-.top .account .acct > summary:hover, .top .account .acct[open] > summary { background: var(--hover); }
-.top .account .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 12rem; display: grid; gap: 2px; padding: 6px; border-radius: var(--r-ctl); background: var(--console); border: 1px solid var(--rail); box-shadow: 0 12px 28px -12px rgba(0, 0, 0, .45); }
-.top .account .acct-menu a, .top .account .acct-menu .link { width: 100%; padding: 8px 10px; border-radius: 6px; text-align: left; text-decoration: none; justify-content: flex-start; min-height: 2.5rem; }
-.top .account .acct-menu a:hover, .top .account .acct-menu .link:hover { background: var(--hover); }
-.top .account .acct-menu form { margin: 0; }
-.jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
-.jump[hidden] { display: none; }
-.jump a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rail); color: var(--paper); text-decoration: none; font-size: .875rem; }
-.jump a:hover { background: var(--hover); }
-main section.panel { scroll-margin-top: 72px; }
-@media print { .jump, .top .account .acct { display: none; } }
 
 /* Phase BB: depth on the figures (owner, 2026-10-25: "build it ... with 0 risk"). Columns and horizontal bars show a lit top and a darker side
    (charts.py draws the two faces; the front face is the value and keeps its exact size). The tile strips and boxes get a raised edge.

@@ -37,7 +37,8 @@ def figures(wk, inp, moves):
     a = at_target(v["cells"], TARGET)
     need = [c for c in v["cells"] if c["required"] > 0]
     short = sum(max(0.0, c["required"] - c["now"]) for c in need) * inp["interval"] / 60
-    return {"at": a["now"], "of": a["intervals"], "safe": a.get("safe"), "short_h": round(short, 1), "moves": len(moves)}
+    worst = min((min(c["now"] / c["required"], TARGET) for c in need), default=0)
+    return {"at": a["now"], "of": a["intervals"], "safe": a.get("safe"), "worst": round(worst, 3), "short_h": round(short, 1), "moves": len(moves)}
 
 
 rows = []
@@ -48,13 +49,15 @@ for n, tight in ((20, 0.95), (20, 1.05), (35, 0.95), (35, 1.05), (50, 0.95), (50
         row = {"case": f"n={n} need={tight} seed={seed}", "planned": figures(wk, inp, [])}
         for arm, run in (("fix", lambda: replan(v, inp, 0, target=TARGET)["moves"]),
                          ("fresh", lambda: replan(v, inp, 0, target=TARGET, fresh=True)["moves"]),
-                         ("exact", lambda: rescue.solve(v, inp, TARGET, None, 0))):
+                         ("exact", lambda: rescue.solve(v, inp, TARGET, None, 0)),
+                         ("balanced", lambda: rescue.solve(v, inp, TARGET, None, 0, lift_worst=True))):
             t = time.time()
             out = run()
             moves = out["moves"] if isinstance(out, dict) else out
             row[arm] = {**figures(wk, inp, moves), "s": round(time.time() - t, 1), **({"solver": out.get("solver")} if isinstance(out, dict) else {})}
         rows.append(row)
         print(row["case"], "| planned", row["planned"]["at"], "| fix", row["fix"]["at"], row["fix"]["s"], "| fresh", row["fresh"]["at"], row["fresh"]["s"],
-              "| exact", row["exact"]["at"], row["exact"]["s"], row["exact"].get("solver"), "of", row["planned"]["of"], flush=True)
+              "| exact", row["exact"]["at"], row["exact"]["s"], "| balanced", row["balanced"]["at"], row["balanced"]["s"], row["balanced"].get("solver"),
+              "| worst fix/fresh/exact/balanced", row["fix"]["worst"], row["fresh"]["worst"], row["exact"]["worst"], row["balanced"]["worst"], flush=True)
 if "--json" in sys.argv:
     json.dump(rows, open(sys.argv[sys.argv.index("--json") + 1], "w"), indent=1)

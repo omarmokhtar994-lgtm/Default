@@ -1,0 +1,20 @@
+Phase BO, change 1: Fix rest of the day and Replan the day's breaks solved exactly. Rule written 2026-11-12 (Egypt time) BEFORE any B run.
+
+Owner, 2026-11-12: "Go, count of intervals at target and worst intervals, try to balance both actually."
+Reading taken: the count of intervals at the target comes first; among plans with the same count, the worst interval (its share of demand,
+capped at the target) is lifted as far as it goes; then the rest of Rescue's order (10 minutes over, fewest moved). Nothing is given up
+(may_give_up = 0), so no interval that is under the target falls below where it is now.
+
+A = today: day.replan (greedy, "Fix rest of the day") and day.replan fresh ("Replan the day's breaks").
+B = rescue.solve(..., may_give_up=0, lift_worst=True), 12 s limit, 4 workers, seed 9000.
+Cases: evidence/phase_bo/bench_breaks.py (12 made-up days, 20 to 50 people, slack and tight), counted by the page's own day_view and at_target.
+
+B is adopted for both tools only if ALL hold:
+ 1. Count: on every case B's intervals at the target >= A's (both A tools).
+ 2. Worst: on every case B's worst interval share >= the better A tool's worst share minus 0.03 (three points of demand).
+ 3. Proven: B ends OPTIMAL on every case of 50 people or fewer.
+ 4. Time: B's slowest case <= 6 s, and B's total time <= A's total (fix + fresh) + 10 s.
+ 5. Rules: B's moves keep every rule the page checks when they are applied (covered by the existing rescue tests and a new test).
+If 1, 3, 4 hold and only 2 fails: try B' = B with the worst interval held at no less than the greedy tool's (the greedy plan as a floor), same rule.
+If neither B nor B' passes: nothing changes, and the figures are reported.
+Losses are stated per case whatever the decision.

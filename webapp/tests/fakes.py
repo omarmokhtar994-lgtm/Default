@@ -50,7 +50,7 @@ def runner(argv):
         (case / "packages" / f"{stem}_03_FULL_DEBUG.zip").write_bytes(b"z" * 50_000)
         (case / f"{stem}.l6_3_2_3_solver_audit.json").write_text('{"kept": true}', encoding="utf-8")
     if "PREFERENCE" in stem:  # Phase BG: the week swapped toward Preference shifts, and its record
-        preference_candidate(case, stem, passed="PREFERENCEFAIL" not in stem)
+        preference_candidate(case, stem, passed="PREFERENCEFAIL" not in stem, costly="PREFERENCECOST" in stem)
     elif "CONSISTENT" in stem:  # Phase AL: the steadier week the engine writes beside its schedule, and its record
         consistent_candidate(case, stem, passed="CONSISTENTFAIL" not in stem)
     # Phase L: the engine's own outcome, copied from real runs (names replaced).
@@ -87,7 +87,7 @@ def consistent_candidate(case, stem, passed=True):
         encoding="utf-8")
 
 
-def preference_candidate(case, stem, passed=True):
+def preference_candidate(case, stem, passed=True, costly=False):
     """The engine's PREFERENCE_CANDIDATE (Phase BE): a copy of the real B3 week and the runner's verdict on it in BUSINESS_OUTCOME.json, with the
     swap figures the runner copies from the audit (made-up counts)."""
     import shutil
@@ -98,6 +98,9 @@ def preference_candidate(case, stem, passed=True):
              "status": "PASS" if passed else "FAIL", "hard_fail_count": 0 if passed else 2,
              "coverage_no_worse": passed, "coverage_losses": [] if passed else ["after_target"],
              "preference": {"swaps": 13, "matched_before": 21, "matched_after": 34}}
+    if costly:  # Phase BP: moves to the asked shift inside the 2% allowance, with what they cost
+        entry.update({"allowance": 0.02, "coverage_cost": {"after_target": 2.0, "after100": 1.0},
+                      "preference": {"swaps": 13, "moves": 5, "matched_before": 21, "matched_after": 39}})
     (case / "BUSINESS_OUTCOME.json").write_text(json.dumps({"independent_validation": {
         "status": "PASS", "alternative_exports": [{"role": "MAX_TARGET_CANDIDATE", "status": "PASS"}, entry]}}),
         encoding="utf-8")

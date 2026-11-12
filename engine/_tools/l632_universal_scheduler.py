@@ -20447,6 +20447,27 @@ def shift_consistency_polish(
 
 
 PREFERENCE_SWAP_TIME_LIMIT_SEC = 20.0
+# Phase BP (owner, 2026-11-12: a preference may cost coverage "maybe 1-2% maximum"): how far each guarded coverage count of the
+# PREFERENCE_CANDIDATE may fall below the selected schedule's. Rule: evidence/phase_bp/PREFERENCE_ALLOWANCE_RULE.txt.
+PREFERENCE_COVERAGE_ALLOWANCE = 0.02
+
+
+def preference_allowance_cost(new: Mapping[str, Any], selected: Mapping[str, Any], allowance: float) -> Optional[Dict[str, float]]:
+    """What ``new`` costs against the ``selected`` schedule's metrics, or None when it is outside the allowance.
+
+    Each guarded higher-is-better coverage count may be lower by at most floor(allowance x the selected value). Every other guarded
+    measure stays no worse, except the overage measures when an allowance is given: a moved person is surplus where they land.
+    """
+    cost: Dict[str, float] = {}
+    for key in _consistency_metrics_no_worse(new, selected):
+        if key in SHIFT_CONSISTENCY_GUARD_HIGHER:
+            drop = float(selected.get(key, 0) or 0) - float(new.get(key, 0) or 0)
+            if drop > int(allowance * float(selected.get(key, 0) or 0)):
+                return None
+            cost[key] = drop
+        elif not (allowance > 0 and key in SHIFT_CONSISTENCY_GUARD_LOWER and "overage" in key):
+            return None
+    return cost
 
 
 def preference_distance(parsed: ParsedInput, a: int, d: int, shift_index: Optional[int]) -> int:
@@ -20464,14 +20485,19 @@ def preference_swap_polish(
     skeleton: SkeletonSolution,
     solution: BreakSolution,
     time_limit_sec: float = PREFERENCE_SWAP_TIME_LIMIT_SEC,
+    allowance: float = PREFERENCE_COVERAGE_ALLOWANCE,
 ) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
     """Phase BE: same-day swaps between interchangeable associates that bring both closer to their Preference shift.
 
     Rule: evidence/phase_be/REQUESTS.md. Returns the original objects with the reason when nothing is kept.
+
+    Phase BP: after the swaps, one associate's day may move to the asked shift: free moves first, then moves whose cumulative
+    coverage cost against the selected schedule stays inside ``allowance`` (evidence/phase_bp/PREFERENCE_ALLOWANCE_RULE.txt).
     """
     started = time.time()
     deadline = started + float(time_limit_sec)
-    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0, "stopped_by_time_limit": False}
+    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0, "stopped_by_time_limit": False,
+                              "moves": 0, "allowance": float(allowance), "coverage_cost": {}}
 
     def unchanged(status: str) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
         record["status"] = status
@@ -20551,15 +20577,80 @@ def preference_swap_polish(
                         current_skeleton, current_metrics = trial_skeleton, metrics
                         record["swaps"] += 1
                         improved = True
-    if not record["swaps"]:
+
+    # Phase BP: single moves to the asked shift (same length, so the person-day keeps its break pattern).
+    by_label = {norm(s.label): s.index for s in shifts}
+
+    def asked(a: int, d: int) -> Optional[int]:
+        assoc = parsed.associates[a]
+        pref = assoc.preferences[d] if d < len(assoc.preferences) else ""
+        if preference_kind(pref) != "shift" or not movable(a, d):
+            return None
+        target = by_label.get(norm(pref))
+        if target is None or target == rows[a][d] or shifts[target].duration_min != shifts[rows[a][d]].duration_min:
+            return None
+        return target
+
+    def moved(a: int, d: int, target: int) -> Optional[Tuple[Any, ...]]:
+        """The week with (a, d) on ``target``: (rows, skeleton, employee quality, metrics, cost), or None when a rule or the allowance refuses."""
+        row = list(rows[a])
+        row[d] = target
+        if not (_consistency_row_allowed(parsed, a, row) and _consistency_cell_allowed(parsed, a, d, shifts[target])):
+            return None
+        record["trials"] += 1
+        trial = [list(r) for r in rows]
+        trial[a] = row
+        trial_skeleton = _consistency_skeleton(parsed, skeleton, trial)
+        employee = employee_operational_quality(parsed, trial_skeleton)
+        if not _consistency_employee_no_worse(employee, employee_now):
+            return None
+        metrics = calculate_metrics(parsed, trial_skeleton, pattern, solution.patterns)
+        cost = preference_allowance_cost(metrics, base_metrics, allowance)
+        return None if cost is None else (trial, trial_skeleton, employee, metrics, cost)
+
+    def candidates() -> List[Tuple[int, int, int]]:
+        return [(a, d, t) for a in range(A) for d in range(7) for t in [asked(a, d)] if t is not None]
+
+    def keep(found: Tuple[Any, ...]) -> None:
+        nonlocal rows, current_skeleton, employee_now, current_metrics
+        rows, current_skeleton, employee_now, current_metrics = found[0], found[1], found[2], found[3]
+        record["moves"] += 1
+
+    for a, d, target in candidates():  # free moves: no guarded measure is worse
+        if time.time() >= deadline:
+            record["stopped_by_time_limit"] = True
+            break
+        found = moved(a, d, target)
+        if found is not None and not found[4] and not _consistency_metrics_no_worse(found[3], base_metrics):
+            keep(found)
+    if allowance > 0 and not record["stopped_by_time_limit"]:  # then inside the allowance, cheapest first
+        priced = []
+        for a, d, target in candidates():
+            if time.time() >= deadline:
+                record["stopped_by_time_limit"] = True
+                break
+            found = moved(a, d, target)
+            if found is not None:
+                priced.append((sum(found[4].values()), a, d, target))
+        for _, a, d, target in sorted(priced):
+            if time.time() >= deadline:
+                record["stopped_by_time_limit"] = True
+                break
+            found = moved(a, d, target)  # priced again on the week as it now stands: the allowance is cumulative
+            if found is not None:
+                keep(found)
+    if not (record["swaps"] or record["moves"]):
         return unchanged("NO_CHANGE")
+    record["coverage_cost"] = {k: float(base_metrics.get(k, 0) or 0) - float(current_metrics.get(k, 0) or 0)
+                               for k in SHIFT_CONSISTENCY_GUARD_HIGHER
+                               if float(current_metrics.get(k, 0) or 0) < float(base_metrics.get(k, 0) or 0)}
     final_skeleton = current_skeleton
     final_skeleton.diagnostics["no_break_metrics"] = calculate_metrics(
         parsed, final_skeleton, {(a, d): None for a, d, _ in scheduled_cells(final_skeleton)}, [])
     final_skeleton.diagnostics["preference_swap_polish"] = True
     diagnostics = {k: v for k, v in solution.diagnostics.items()
                    if k not in {"release_validation", "hard_failure_types", "hard_fail_count", "early_release_validation"}}
-    diagnostics["preference_swap_polish"] = {"swaps": record["swaps"]}
+    diagnostics["preference_swap_polish"] = {"swaps": record["swaps"], "moves": record["moves"]}
     swapped = BreakSolution(
         profile=solution.profile, skeleton_profile=solution.skeleton_profile, cp_status=solution.cp_status,
         elapsed_sec=solution.elapsed_sec, objective=solution.objective, pattern_width=solution.pattern_width,
@@ -20572,6 +20663,7 @@ def preference_swap_polish(
             or int(validation.get("hard_fail_count", 1) or 0) > int(original_validation.get("hard_fail_count", 0) or 0)):
         record["reason"] = "VALIDATION_OR_CLASS_CHANGED"
         record["swaps_discarded"], record["swaps"] = record["swaps"], 0
+        record["moves_discarded"], record["moves"], record["coverage_cost"] = record["moves"], 0, {}
         return unchanged("KEPT_ORIGINAL")
     record["matched_after"] = int(employee_now.get("preference_match_count", 0))
     record["status"] = "APPLIED"
@@ -24897,7 +24989,7 @@ def run_case(
         swap_record["published_as"] = (
             "PREFERENCE_CANDIDATE" if add_preference_export(selection, (swapped_sk, swapped_br), swap_record) else None)
         audit["preference_swap_polish"] = swap_record
-        print(f"PREFERENCE_SWAP_POLISH {swap_record.get('status')}: {swap_record.get('swaps', 0)} swaps"
+        print(f"PREFERENCE_SWAP_POLISH {swap_record.get('status')}: {swap_record.get('swaps', 0)} swaps, {swap_record.get('moves', 0)} moves"
               + (f", preference matches {swap_record['matched_before']} -> {swap_record['matched_after']}"
                  f" (published as PREFERENCE_CANDIDATE; the selected schedule is unchanged)"
                  if swap_record.get("status") == "APPLIED" else ""), file=log, flush=True)

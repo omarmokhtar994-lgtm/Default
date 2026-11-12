@@ -174,7 +174,10 @@ class RunQueue:
                 found = [p for p in record.parent.glob(f"*{suffix}") if p.name == name] or \
                     sorted(record.parent.glob(f"*{suffix}"))
                 if found:
-                    return found[0], entry.get(figures) or {}
+                    kept = dict(entry.get(figures) or {})
+                    if entry.get("coverage_cost"):  # Phase BP: a preference week inside its allowance says what it costs
+                        kept.update(allowance=entry.get("allowance"), coverage_cost=entry["coverage_cost"])
+                    return found[0], kept
         return None
 
     def keep_schedules(self, run_id: str) -> None:

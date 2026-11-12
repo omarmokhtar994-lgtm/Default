@@ -33,6 +33,23 @@ class TheVersion(unittest.TestCase):
         self.assertIn("Tool, closer to preferences", body)
         self.assertIn("closer to the Preference shifts: 21 matched before, 34 after (13 same-day swaps)", body)
 
+    def test_one_that_costs_coverage_inside_the_allowance_says_so(self):
+        # Phase BP (owner, 2026-11-12: a preference may cost coverage "maybe 1-2% maximum"): the engine may move a person to the asked shift
+        run_id = finished(self.app, self.store, self.client, "VERSIONED_PREFERENCECOST_week.xlsx")
+        kept = next(v for v in self.book.versions(run_id) if v["kind"] == "tool_preference")
+        self.assertEqual(json.loads(kept["checks"])["preference"],
+                         {"swaps": 13, "moves": 5, "matched_before": 21, "matched_after": 39, "allowance": 0.02,
+                          "coverage_cost": {"after_target": 2.0, "after100": 1.0}})
+        self.assertEqual(kept["in_use"], 0)
+        body = html.unescape(self.client.get(f"/runs/{run_id}/schedules").get_data(as_text=True))
+        self.assertIn("closer to the Preference shifts: 21 matched before, 39 after (13 same-day swaps, 5 moves to the asked shift); "
+                      "costs coverage inside the 2% allowance: 2 fewer intervals at the target", body)
+
+    def test_one_that_costs_nothing_says_same_coverage(self):
+        run_id = finished(self.app, self.store, self.client, "VERSIONED_PREFERENCE_week.xlsx")
+        body = html.unescape(self.client.get(f"/runs/{run_id}/schedules").get_data(as_text=True))
+        self.assertIn("34 after (13 same-day swaps); same coverage", body)
+
     def test_a_failed_one_is_not_kept(self):
         run_id = finished(self.app, self.store, self.client, "VERSIONED_PREFERENCEFAIL_week.xlsx")
         self.assertEqual([k for k, _, _ in self.kinds(run_id)], ["tool_after"])

@@ -5,7 +5,7 @@
   their licence; no page asks Google for anything, so the CSP allows this site only.
 - Icons are Phosphor's shapes (MIT, with its licence) inside the site's own icons.css, drawn by the stylesheet: the
   menu's links keep their markup.
-- The menu is grouped by job: Today, This week, Insights, then Setup for managers; the page labels stay.
+- The menu is grouped by job: Today, Plan, Requests, Reports, People, then Admin; the page labels stay (regrouped in Phase BN).
 """
 import re
 import unittest
@@ -64,7 +64,9 @@ class TheLook(unittest.TestCase):
         page = self.admin.get("/").get_data(as_text=True)
         side = page[page.index('class="leftnav"'):page.index("</aside>")]
         heads = re.findall(r'<p class="navhead">([^<]+)</p>', side)
-        self.assertEqual(heads, ["Insights", "Setup"])  # no program picked: Today and This week need one
+        # re-pinned (Phase BN, owner: "rearrange tabs ... 100% organized", sample evidence/phase_bn/nav): Insights became Plan (Volumes) and Reports,
+        # Setup became People and Admin; every page keeps its label and URL. No program picked: Today and Requests need one.
+        self.assertEqual(heads, ["Plan", "Reports", "People", "Admin"])
         self.assertIn('<a href="/" class="on" aria-current="page">Home</a>', side)  # the links keep their markup
 
 

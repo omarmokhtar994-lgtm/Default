@@ -52,27 +52,29 @@
     {% if nav_unit %}<p class="navhead">Today</p>
     {% if can('rta_view') %}{{ navlink('day', url_for('day_page', program=nav_unit, date=nav_date), 'RTA') }}{% endif %}
     {% if can('overview') %}{{ navlink('overview', url_for('overview_page', program=nav_unit, date=nav_date), 'Overview') }}
-    {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}{% endif %}
-    {% if can('schedules_view') %}<p class="navhead">This week</p>
-    {{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
+    {{ navlink('wallboard', url_for('day_wallboard', program=nav_unit), 'Wallboard') }}{% endif %}{% endif %}
+    {% if nav_unit and can('schedules_view') or can('volumes_view') %}<p class="navhead">Plan</p>
+    {% if nav_unit and can('schedules_view') %}{{ navlink('week', url_for('week_page', program=nav_unit), 'Weeks') }}
     {{ navlink('schedules', url_for('schedules_for', program=nav_unit), 'Schedules') }}{% endif %}
-    <p class="navhead">Requests</p>
-    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if (nav_requests or 0) + (news_n or 0) %} <span class="count" title="Waiting for you, or answered">{{ (nav_requests or 0) + (news_n or 0) }}</span>{% endif %}</a>{% endif %}
-    <p class="navhead">Insights</p>
+    {% if can('volumes_view') %}{{ navlink('volumes', url_for('volumes_page', program=nav_unit or none), 'Volumes') }}{% endif %}{% endif %}
+    {% if nav_unit %}<p class="navhead">Requests</p>
+    <a href="{{ url_for('requests_page', program=nav_unit) }}"{% if nav_active == 'requests' %} class="on" aria-current="page"{% endif %}>Leave and swaps{% if (nav_requests or 0) + (news_n or 0) %} <span class="count" title="Waiting for you, or answered">{{ (nav_requests or 0) + (news_n or 0) }}</span>{% endif %}</a>
+    {% if can('approve_tm') or can('rta_change') %}{{ navlink('coaching', url_for('requests_coaching', program=nav_unit), 'Coaching') }}{% endif %}{% endif %}
+    {% if can('analysis') or can('exports') %}<p class="navhead">Reports</p>
     {% if nav_unit and can('analysis') %}{{ navlink('analysis', url_for('program', name=nav_unit), 'Analysis') }}{% endif %}
-    {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}{% endif %}
-    {% if can('analysis') %}{{ navlink('shrinkage', url_for('shrinkage_page', program=nav_unit or none), 'Shrinkage') }}{% endif %}
-    {% if can('analysis') %}{{ navlink('incidents', url_for('incidents_page', program=nav_unit or none), 'Incidents') }}{% endif %}
-    {% if can('volumes_view') %}{{ navlink('volumes', url_for('volumes_page', program=nav_unit or none), 'Volumes') }}{% endif %}
-    {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}
+    {% if can('analysis') %}{{ navlink('programs', url_for('programs'), 'Programs') }}
+    {{ navlink('shrinkage', url_for('shrinkage_page', program=nav_unit or none), 'Shrinkage') }}
+    {{ navlink('incidents', url_for('incidents_page', program=nav_unit or none), 'Incidents') }}{% endif %}
+    {% if can('exports') %}{{ navlink('exports', url_for('exports_page'), 'Exports') }}{% endif %}{% endif %}
+    {% if can('team') or can('people') or can('setup') %}<p class="navhead">People</p>
     {% if can('team') %}{{ navlink('team', url_for('team_page'), 'Team') }}{% endif %}
-    {% if can('people') or can('setup') %}<p class="navhead">Setup</p>
     {% if can('people') %}{{ navlink('people', url_for('admin_users'), 'People') }}{% endif %}
     {% if can('setup') %}{{ navlink('with', url_for('with_setup', program=nav_unit or none), 'Departments and people') }}
-    {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}{% endif %}
-    {% if user.is_admin %}{{ navlink('roles', url_for('roles_page'), 'Roles') }}{% endif %}
-    {% if user.is_admin %}{{ navlink('notify', url_for('notifications_page'), 'Notifications') }}{% endif %}
-    {% if user.is_admin %}{{ navlink('setup', url_for('program_setup'), 'LOBs and defaults') }}{% endif %}{% endif %}
+    {{ navlink('channels', url_for('channel_setup', program=nav_unit or none), 'Associate channels') }}{% endif %}{% endif %}
+    {% if user.is_admin %}<p class="navhead">Admin</p>
+    {{ navlink('roles', url_for('roles_page'), 'Roles') }}
+    {{ navlink('notify', url_for('notifications_page'), 'Notifications') }}
+    {{ navlink('setup', url_for('program_setup'), 'LOBs and defaults') }}{% endif %}
   </nav>{% endif %}
   </details>
 </aside>

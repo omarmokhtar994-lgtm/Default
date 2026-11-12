@@ -1884,9 +1884,12 @@ class TheNewLayout(unittest.TestCase):
         self.assertIn('href="/overview?program=NMG&date=2026-10-14"', side)  # the menu keeps the day
         self.assertIn('aria-current="page">RTA</a>', side)
         self.assertIn('<option value="NMG" selected>NMG</option>', side)
-        self.assertNotIn(">People<", side)  # planners manage nobody
+        # re-pinned (Phase BN, menu regrouped): "People" is now also a group heading (Team, People, Departments), so the link is matched as a link
+        self.assertNotIn(">People</a>", side)  # planners manage nobody
+        # Phase BN: Coaching had no menu entry; it sits under Requests for those who may ask for it, and the menu names its six groups
+        self.assertRegex(side, r'(?s)<p class="navhead">Requests</p>.*?>Leave and swaps.*?<a [^>]*>Coaching</a>')
         side = self.part(self.admin.get("/").get_data(as_text=True), "aside", "leftnav")
-        for words in (">People<", ">LOBs and defaults<"):
+        for words in (">People</a>", ">LOBs and defaults<"):
             self.assertIn(words, side)
 
     def test_home_starts_from_my_programs(self):

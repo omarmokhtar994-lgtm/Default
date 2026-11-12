@@ -152,7 +152,7 @@ def register(app, ctx) -> None:
         if key:
             book.expire_overdue(key, now)
         news = book.news(g.user["id"], read=True)  # Phase AU
-        return render_template("requests_coaching.html", unit=key, news=news, label=ctx._unit_filter(key) if key else "",
+        return render_template("requests_coaching.html", nav_active="coaching", unit=key, news=news, label=ctx._unit_filter(key) if key else "",
                                roster=sorted(leave.names(key)) if key else [], names=names, on=on, minutes=minutes, billable=billable,
                                options=options, problem=problem, depts=[d["name"] if isinstance(d, dict) else d
                                                                         for d in (ctx._with_lists(key) if key else [])],

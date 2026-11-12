@@ -5,7 +5,7 @@ BUSINESS_OUTCOME.json. A passed one with no worse coverage is kept as "Tool, clo
 starts.
 
 Re-pinned in Phase BP (owner, 2026-11-12, asked "should it go in use by itself": "yes"): when a run finishes and nobody has set a version of that
-week in use, its preference version is set in use by itself (TheInUse below). It never replaces a version a person set in use, and versions
+week in use, its preference version is set in use by itself (TheInUse below), and only when its coverage is the same ("go with 1"). It never replaces a version a person set in use, and versions
 added to old runs at start are still only offered."""
 import html
 import json
@@ -86,9 +86,12 @@ class TheInUse(unittest.TestCase):
         self.assertEqual([(e["subject"], e["detail"]) for e in said],
                          [("Tool, closer to preferences", "by itself: the run's preference version, nothing else was in use")])
 
-    def test_one_that_costs_coverage_goes_in_use_too(self):
+    def test_one_that_costs_coverage_stays_offered(self):
+        # owner, 2026-11-12 ("go with 1"): by itself only when coverage is the same; a version that costs anything is one click away
         run_id = finished(self.app, self.store, self.client, "VERSIONED_PREFERENCECOST_week.xlsx")
-        self.assertEqual(self.in_use(run_id), ["tool_preference"])
+        self.assertEqual(self.in_use(run_id), [])
+        self.assertIn("tool_preference", [v["kind"] for v in self.book.versions(run_id)])
+        self.assertEqual(self.store.list_events(0, 4e9, kinds=["set_in_use"]), [])
 
     def test_it_never_replaces_a_version_a_person_set_in_use(self):
         first = finished(self.app, self.store, self.client, "VERSIONED_plain_week.xlsx")

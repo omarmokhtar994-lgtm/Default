@@ -538,7 +538,7 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
   `PREFERENCE_CANDIDATE`, and its audit record says the cost and which measure refused each move. Rule and A/B: `evidence/phase_bp`.
 - **Runner:** `preference_coverage_verdict` re-checks the allowance on the independent validator's numbers (never above 2%); the outcome text says the cost.
 - **Website:** the version "Tool, closer to preferences" says what it costs. A run that just finished puts it in use by itself when no version of that week
-  is in use (owner: "yes"); it never replaces a version a person chose, and versions added to old runs at start stay offered only.
+  is in use and it costs no coverage (owner: "yes", then "go with 1"); a version that costs anything stays offered; it never replaces a version a person chose, and versions added to old runs at start stay offered only.
 - **Open (measured, not fixed):** when a run is short of time the schedule comes from the `deterministic_target_baseline` skeleton, which weighs Preferences
   least (144 of 180 honoured against 177); the preference step got 1 s at the end of a 300 s run. See `evidence/phase_bp/PREFERENCE_AB.md`.
 - **Navigation:** account menu in the top bar (`details.acct`), the menu link People reads Accounts, and People, Weeks and Schedules start with links to

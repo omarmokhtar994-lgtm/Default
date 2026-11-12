@@ -195,10 +195,11 @@ class ScheduleBook:
         preferences" under the same rule, with the engine's swap figures in its checks.
 
         Phase BP (owner, 2026-11-12: it should go in use by itself): with ``use``, a version kept just now is set in use when
-        no version of that program and week is in use, so it never replaces one a person chose."""
+        no version of that program and week is in use, so it never replaces one a person chose, and only when it costs no
+        coverage: a version inside the allowance that costs something stays offered."""
         had = any(v["kind"] == "tool_preference" for v in self.store.list_schedules(run_id=run["id"]))
         kept = self._ensure_alternative(run, source, "tool_preference", "Tool, closer to preferences", "preference", preference)
-        if not use or had or kept is None:
+        if not use or had or kept is None or preference.get("coverage_cost"):  # owner ("go with 1"): by itself only at the same coverage
             return kept
         with self._lock(run["id"]):
             scope = (self.store.list_schedules(program=kept["program"], week_start=kept["week_start"])

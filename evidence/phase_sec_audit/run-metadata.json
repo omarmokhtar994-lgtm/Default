@@ -1,0 +1,22 @@
+{
+ "run_id": "run-1",
+ "repo": "Default (Team Scheduler)",
+ "target": "/home/user/Default",
+ "source_ref": "8fec106d68e4e630dba5263f1e778e8b7e06bd94 (worktree clean)",
+ "profile": "standard",
+ "scope_paths": [
+  "webapp/",
+  "deploy/"
+ ],
+ "budget": 65,
+ "execution_policy": "sandboxed-source-and-local-only",
+ "companions": [],
+ "prior_runs": [],
+ "shared_file_owners": "parent",
+ "run_status": "complete",
+ "agents_spent": 45,
+ "coverage": "source-only, all in-scope Python, templates, static files and deploy scripts reviewed; no lead confirmed by execution",
+ "profile_note": "Started as quick; changed to standard for wave 2 at the owner's request (second wave over deferred units)",
+ "waves": 4,
+ "budget_note": "Raised from 40 to 65 by the parent at the owner's request ('why can't you use more than 6?') to fund wave 3 over the 7 deferred units; the 40 was the parent's own initial estimate, not a system limit"
+}

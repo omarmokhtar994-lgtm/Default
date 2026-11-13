@@ -1,0 +1,15 @@
+/* Look A, "Atelier" (light): porcelain page, white panels that float on layered shadows, deep ink, one burnished-brass mark for what is picked. */
+html:root:root {
+  --night: #F3F4F6; --rail-bg: #FFFFFF; --console: #FFFFFF; --console-2: #F6F7F9; --rail: #E4E7EC; --paper: #101826; --dim: #566173;
+  --action: #101826; --action-hover: #26324A; --on-action: #FFFFFF; --edge: #98A1B0; --selected: #F4F0E6; --hi: #7A5A1E; --on-hi: #FFFFFF;
+  --panel: #FFFFFF; --header: rgba(255, 255, 255, .94); --well: #F6F7F9; --hover: rgba(16, 24, 38, .045); --shadow: rgba(16, 24, 38, .16);
+  --empty-cell: #ECEFF3; --empty-key: #E4E7EC; --code-bg: #F6F7F9; --code-ink: #101826; --r-panel: 14px; --r-ctl: 8px; --done: #8795A8;
+  --page-bg: none; --page-field: #F3F4F6;
+}
+body { background-image: none; }
+.top { background: rgba(255, 255, 255, .94); }
+.leftnav { background: #FFFFFF; }
+h1, h2, h3 { font-stretch: 108%; }
+.panel { border: 0; box-shadow: 0 0 0 1px rgba(16, 24, 38, .06), 0 1px 2px rgba(16, 24, 38, .04), 0 10px 28px -10px rgba(16, 24, 38, .12); }
+.top { border-bottom: 1px solid #E4E7EC; }
+button.primary, .button.primary { box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset, 0 6px 14px -6px rgba(16, 24, 38, .45); }

@@ -170,6 +170,28 @@ def grid(wb, title: str, step: int) -> Dict[Tuple[int, int], Optional[float]]:
     return out
 
 
+def _hours_to_minutes(value: Any) -> Optional[int]:
+    """A Shift Length cell (8.5, "9", "8.5 h") as minutes, None when empty or not a number of hours between 4 and 16."""
+    found = re.findall(r"\d+(?:\.\d+)?", str(value if value is not None else ""))
+    if len(found) != 1:
+        return None
+    minutes = int(round(float(found[0]) * 60))
+    return minutes if 240 <= minutes <= 960 else None
+
+
+def _whole(value: Any, highest: int) -> Optional[int]:
+    """A whole number from 0 to ``highest`` in a cell, None when empty or anything else."""
+    found = re.fullmatch(r"\s*(\d+)(?:\.0+)?\s*", str(value if value is not None else ""))
+    return int(found.group(1)) if found and int(found.group(1)) <= highest else None
+
+
+def owed_off_days(k: Contract, key: str, long_mode: bool, room: int) -> int:
+    """How many OFF days a person owes out of the ``room`` days not on leave: the Schedule row's own Off Days when it has one (a part-timer),
+    else two, or three in long mode."""
+    own = getattr(k, "person", {}).get(key, {}).get("off")
+    return max(0, min(own if own is not None else (3 if long_mode else 2), room))
+
+
 def read_contract(path: Path) -> Contract:
     wb = load_workbook(path, data_only=False)
     im = instructions(wb)
@@ -200,15 +222,23 @@ def read_contract(path: Path) -> Contract:
     lunches = int(num(get(im, "Lunch Count", "Meal Count", "Count of Lunch Breaks", default=1)))
     lunch_len = int(num(get(im, "Lunch Duration Minutes", "Lunch Duration", "Meal Duration Minutes", default=30)))
     k.break_lengths = sorted([short_len] * shorts + [lunch_len] * lunches)
+    # Phase BL: the order the breaks come in a shift (short breaks, then lunches; the usual 15/30/15 is Break 1, Lunch, Break 2), so that a
+    # row's "Breaks" N can take the first N of them
+    k.break_order = [short_len] * shorts + [lunch_len] * lunches
+    if len(k.break_order) == 3 and sorted(x // 15 for x in k.break_order) == [1, 1, 2]:
+        k.break_order = [short_len, lunch_len, short_len]
     # Breaks by shift length: "Break Set For Shifts Of 10 Hours Or More" =
     # "15, 30, 15, 15". The longest threshold a shift reaches applies.
     k.break_sets: List[Tuple[int, List[int]]] = []
+    k.break_sets_ordered: List[Tuple[int, List[int]]] = []
     for label, value in im.items():
         m = re.match(r"^break set for shifts of (\d+(?:\.\d+)?) hours? or more$", label)
         if m:
             minutes = [int(float(t)) for t in re.split(r"[,;/]+", str(value)) if t.strip()]
             k.break_sets.append((int(round(float(m.group(1)) * 60)), sorted(minutes)))
+            k.break_sets_ordered.append((int(round(float(m.group(1)) * 60)), minutes))
     k.break_sets.sort()
+    k.break_sets_ordered.sort(key=lambda row: row[0])
     hard_gap = num(get(im, "Break Absolute Minimum Gap Minutes", "Absolute Minimum Gap Between Breaks Minutes",
                        "Break Hard Minimum Gap Minutes", "Minimum Legal Break Separation Minutes"))
     k.break_min_gap = int(hard_gap) if hard_gap is not None else 60
@@ -219,6 +249,12 @@ def read_contract(path: Path) -> Contract:
                      else "REQUIRED_LANGUAGE_ONLY" if "required" in raw_mode or "exclusive" in raw_mode
                      else "MINIMUM_ROWS")
 
+    # Phase AQ: with WHOLE_SHIFT a shift must also end by the window's close (START, the default, checks the start only).
+    shift_rule = re.sub(r"[^a-z0-9]", "", n(get(im, "Language Working Window Shift Rule", "Language Window Shift Rule",
+                                               "Language Working Window Applies To")))
+    k.window_whole = shift_rule in ("wholeshift", "wholeshifts", "entireshift", "startandend", "wholeshiftstartandend",
+                                    "shiftstartandend", "bothends")
+
     # Roster: Schedule sheet, located by header text.
     ws = wb["Schedule"]
     hr = header_row(ws, ("language",))
@@ -226,11 +262,26 @@ def read_contract(path: Path) -> Contract:
     name_c = next(c for h, c in heads.items() if h in ("sf name", "name", "associate name", "employee name"))
     lang_c = next(c for h, c in heads.items() if h == "language")
     k.names, k.lang = [], {}
+    k.person: Dict[str, Dict[str, Any]] = {}
+    len_c = next((c for h, c in heads.items() if h == "shift length"), None)
+    off_c = next((c for h, c in heads.items() if h == "off days"), None)
+    brk_c = next((c for h, c in heads.items() if h == "breaks per day"), None)
+    typ_c = next((c for h, c in heads.items() if h == "employment type"), None)
     for r in range(hr + 1, ws.max_row + 1):
         nm = str(ws.cell(r, name_c).value or "").strip()
         if nm and n(nm) not in ("total", "staffed hc", "required hc"):
             k.names.append(nm)
             k.lang[n(nm)] = n(ws.cell(r, lang_c).value)
+            k.person[n(nm)] = {"len": _hours_to_minutes(ws.cell(r, len_c).value) if len_c else None,
+                               "off": _whole(ws.cell(r, off_c).value, 6) if off_c else None,
+                               "breaks": _whole(ws.cell(r, brk_c).value, 6) if brk_c else None,
+                               "part_time": bool(typ_c) and re.sub(r"[^a-z]", "", n(ws.cell(r, typ_c).value)) in ("parttime", "part", "pt")}
+    # Phase BL: the shift length each row names, and how many breaks that length gets (two rows disagreeing is refused by the engine, never read here)
+    k.part_time_lengths: Set[int] = {i["len"] for i in k.person.values() if i["part_time"] and i["len"] is not None}
+    k.length_breaks: Dict[int, int] = {}
+    for info in k.person.values():
+        if info["len"] is not None and info["breaks"] is not None:
+            k.length_breaks.setdefault(info["len"], info["breaks"])
 
     def by_name_sheet(title: str) -> Dict[str, List[str]]:
         out: Dict[str, List[str]] = {}
@@ -464,7 +515,15 @@ def break_lengths_for(k: Contract, shift_minutes: int) -> List[int]:
     for threshold, minutes in getattr(k, "break_sets", []):
         if shift_minutes >= threshold:
             lengths = minutes
-    return lengths
+    # Phase BL: a row's Breaks N gives its Shift Length the first N breaks of the set that length would have had, in the order they come in a shift
+    count = next((c for length, c in getattr(k, "length_breaks", {}).items() if abs(shift_minutes - length) <= 5), None)
+    if count is None:
+        return lengths
+    ordered = getattr(k, "break_order", lengths)
+    for threshold, minutes in getattr(k, "break_sets_ordered", []):
+        if shift_minutes >= threshold:
+            ordered = minutes
+    return sorted(ordered[:count])
 
 
 def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[str, Any]:
@@ -505,6 +564,16 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                     v.append({"rule": "hard_off_not_honoured", "who": nm, "day": DAYS[d], "got": row[d]})
             if shift_of(fix[d]) and n(row[d]) != f:
                 v.append({"rule": "fixed_not_honoured", "who": nm, "day": DAYS[d], "want": fix[d], "got": row[d]})
+        want_len = getattr(k, "person", {}).get(key, {}).get("len")   # Phase BL: the Shift Length this row names
+        if want_len is not None:
+            for d in range(7):
+                if ss[d] is not None and abs(ss[d][1] - want_len) > 5:
+                    v.append({"rule": "shift_length", "who": nm, "day": DAYS[d], "got": row[d], "want_minutes": want_len})
+        info = getattr(k, "person", {}).get(key, {})
+        if want_len is None and not info.get("part_time"):   # a length a part-timer claims is not for someone with no length of their own
+            for d in range(7):
+                if ss[d] is not None and any(abs(ss[d][1] - m) <= 5 for m in getattr(k, "part_time_lengths", ())):
+                    v.append({"rule": "part_time_shift", "who": nm, "day": DAYS[d], "got": row[d]})
         offs = [d for d in range(7) if ks[d] == "off"]
         long_mode = any(s and s[1] >= k.long_min for s in ss)
         # Two OFF days a week (three in long mode), out of the days not already
@@ -524,12 +593,15 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
             else:
                 leave_days += 1
         room = 7 - leave_days
-        owed = max(0, min(3 if long_mode else 2, room))
+        owed = owed_off_days(k, key, long_mode, room)
         if k.strict_off and len(offs) != owed:
             v.append({"rule": "off_count", "who": nm, "offs": len(offs), "owed": owed})
         if not k.strict_off and len(offs) < min(2, room):
             v.append({"rule": "off_minimum", "who": nm, "offs": len(offs)})
-        if k.strict_off and not k.separate_off and owed >= 2 and not any((d + 1) % 7 in offs for d in offs):
+        # Phase BD (owner, 2026-10-29): hard OFF days the associate's own Preference row names, not next to each other, are accepted
+        wanted_off = {d for d in range(7) if (k.hard_off and n(pref[d]) in ("off", "day off", "rest day")) or (k.fixed_on and n(fix[d]) == "off")}
+        wanted_apart = len(wanted_off) >= 2 and any((d + 1) % 7 not in wanted_off and (d - 1) % 7 not in wanted_off for d in wanted_off)
+        if k.strict_off and not k.separate_off and owed >= 2 and not wanted_apart and not any((d + 1) % 7 in offs for d in offs):
             v.append({"rule": "off_not_consecutive", "who": nm})
         labels = {n(row[d]) for d in range(7) if ks[d] == "shift"}
         if len(labels) > k.max_diff:
@@ -552,7 +624,10 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
                 todays = [w for w in entries if d in w[3]]
                 if not todays:
                     continue  # no window opens this day: the engine reads that as unrestricted
-                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440) for w in todays):
+                if not any((ss[d][0] - w[0]) % 1440 < ((w[1] - w[0]) % 1440 or 1440)
+                           and (not k.window_whole or ((w[1] - w[0]) % 1440 or 1440) == 1440
+                                or (ss[d][0] - w[0]) % 1440 + ss[d][1] <= ((w[1] - w[0]) % 1440 or 1440))
+                           for w in todays):
                     v.append({"rule": "language_working_window", "who": nm, "day": DAYS[d], "shift": row[d]})
 
     # Breaks
@@ -658,7 +733,7 @@ def check(k: Contract, sched: Dict[str, List[str]], breaks, exceptions) -> Dict[
     for row in v:
         by_rule[row["rule"]] += 1
     return {"metrics": dict(m), "violation_count": len(v), "violations_by_rule": dict(by_rule),
-            "violations": v[:200], "language_window_mode": k.window_mode,
+            "violations": v[:200], "language_window_mode": k.window_mode, "language_window_whole_shift": k.window_whole,
             "language_rules": [{**r, "days": sorted(r["days"]), "eligible": sorted(r["eligible"])} for r in k.rules]}
 
 

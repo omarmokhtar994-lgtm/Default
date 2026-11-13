@@ -3,8 +3,11 @@
 {% block content %}
 <div class="phead"><div>
   <h1>Leave and swaps</h1>
-  <p class="byline">{{ label or 'Pick a program' }}. The TM approves first, then the RTA; the RTA's approval changes the schedule in use.</p>
+  <p class="byline">{{ label or 'Pick a program' }}. Each associate's team manager approves first (an admin or a supervisor can approve in their place), then the RTA; the RTA's approval changes the schedule in use. A swap needs the team managers of both people.</p>
 </div></div>
+{% if may_change or can_ask_coaching or changes %}<section class="panel req-list" id="changes" aria-labelledby="chg-h">
+  {% include "_change_requests.html" %}
+</section>{% endif %}
 <section class="panel req-list" aria-labelledby="wait-h">
   <h2 id="wait-h">Waiting</h2>
   {% for r in waiting %}
@@ -13,7 +16,7 @@
     <div class="req-what">
       <h3>{{ r.label }}</h3>
       <p class="req-facts">{% if r.balance_text %}<span{% if r.short %} class="req-warn"{% endif %}>{{ r.balance_text }}</span>{% endif %}
-        <span>{{ 'Waiting for the TM' if r.step == 'tm' else 'Approved by the TM, waiting for the RTA' }}</span></p>
+        <span>{{ r.waiting_on }}</span></p>
       <ul class="req-days">{% for d in r.days %}
         <li><b>{{ d.date.strftime('%a %d %b') }}</b> {{ d.cell or ('no schedule yet' if not d.kept else 'not on the schedule') }}{% if d.impact %}: <span class="{{ 'req-ok' if not d.impact.short else 'req-warn' }}">{{ d.impact.text }}</span>{% for t in d.impact.languages + d.impact.channels %} <span class="req-warn">{{ t }}.</span>{% endfor %}{% endif %}</li>
       {% endfor %}</ul>
@@ -24,18 +27,18 @@
         <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
         <label>Reason, if you refuse <input name="reason" maxlength="200" autocomplete="off"></label>
         <button name="decision" value="refuse">Refuse</button>
-      </form>{% else %}<p class="hint">{{ 'Waiting for a supervisor or an admin.' if r.step == 'tm' else 'Another staff member gives the RTA approval.' }}</p>{% endif %}
+      </form>{% else %}<p class="hint">{{ r.waiting_on ~ '.' if r.step == 'tm' else 'Another staff member gives the RTA approval.' }}</p>{% endif %}
     </div>
   </article>
-  {% else %}<p class="empty">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
+  {% else %}<p class="empty deco">Nothing is waiting. Requests appear here when associates send them from My week.</p>{% endfor %}
 </section>
 <section class="panel req-list" aria-labelledby="swap-h">
   <h2 id="swap-h">Swaps</h2>
   {% for w in swaps %}
   <article class="req">
     <div class="req-who"><b>{{ w.asker }} and {{ w.other }}</b><small>Asked {{ when(w.asked) }}</small>{% if w.note %}<small>“{{ w.note }}”</small>{% endif %}</div>
-    <div class="req-what"><h3>{{ w.label }}</h3><p class="req-facts"><span>{{ w.status_words[:1]|upper ~ w.status_words[1:] }}</span></p></div>
-    <div class="req-act">{% if w.status == 'waiting_tm' and manager %}
+    <div class="req-what"><h3>{{ w.label }}</h3><p class="req-facts"><span>{{ w.waiting_on or (w.status_words[:1]|upper ~ w.status_words[1:]) }}</span></p>{% for t in w.warning_list %}<p class="swap-warn" role="note">Warning, sent anyway: {{ t }}</p>{% endfor %}</div>
+    <div class="req-act">{% if w.mine %}
       <form method="post" action="{{ url_for('request_swap_decide', swap_id=w.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="primary" name="decision" value="approve"><span class="ico i-check-circle" aria-hidden="true"></span>Approve</button>
@@ -43,9 +46,9 @@
         <button name="decision" value="refuse">Refuse</button>
       </form>
       <p class="hint">Approving swaps the two shifts in the schedule in use, with their breaks and channels, after checking the rules again.</p>
-    {% elif w.status == 'waiting_tm' %}<p class="hint">A supervisor or an admin approves swaps.</p>{% else %}<p class="hint">Waiting for {{ w.other }} to accept.</p>{% endif %}</div>
+    {% else %}<p class="hint">{{ w.waiting_on }}.</p>{% endif %}</div>
   </article>
-  {% else %}<p class="empty">No swaps waiting. Associates offer them from My week, to colleagues whose shift keeps the rules.</p>{% endfor %}
+  {% else %}<p class="empty deco">No swaps waiting. Associates offer them from My week, to colleagues on another shift; a swap that breaks a rule carries its warning.</p>{% endfor %}
 </section>
 {% if decided[0] or swaps_decided[0] %}<section class="panel" aria-labelledby="done-h">
   <h2 id="done-h">Decided</h2>
@@ -63,3 +66,4 @@
   </form>
 </section>{% endif %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{{ watch('requests', 'bar', unit) }}{% endblock %}

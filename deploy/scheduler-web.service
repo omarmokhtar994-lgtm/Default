@@ -28,13 +28,20 @@ RestartSec=5
 # runs in flight show as Interrupted and can be resumed.
 KillMode=control-group
 TimeoutStopSec=60
-# Hardening: the service can write only its data folder and the package
-# (the safety gate writes Python caches there).
+# Hardening: the service can write only its data folder. The code and the Python environment are read-only to it (root owns them: seal_package.sh),
+# so a compromise of the website cannot rewrite the code that runs next time. Nothing is compiled into the code folder: Python writes no compiled
+# copies (PYTHONDONTWRITEBYTECODE), and where something compiles on purpose (the safety gate does, for its self-check) the copies go to the private
+# /tmp this service has (PrivateTmp), which is emptied when it stops. The code-style checker's cache goes to the data folder.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths={{DATA_DIR}} {{APP_DIR}}/package
+ReadWritePaths={{DATA_DIR}}
+ReadOnlyPaths={{APP_DIR}}/package {{APP_DIR}}/venv
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPYCACHEPREFIX=/tmp/scheduler-pycache
+Environment=XDG_CACHE_HOME={{DATA_DIR}}/cache
+Environment=RUFF_CACHE_DIR={{DATA_DIR}}/cache/ruff
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes

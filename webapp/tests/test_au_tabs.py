@@ -1,0 +1,186 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+"""Phase AU (owner, 2026-10-21): the RTA decides break changes and coaching on the RTA tab itself (no switching to the
+Requests page), and an associate has two tabs: Today (the day, the breaks, asking to move one) and Weeks (the week
+and the weeks after it, leave, swaps)."""
+import re
+import unittest
+
+from webapp.tests.test_as_pages import _Pages
+from webapp.tests.test_runs import sign_in
+
+
+class TheRtaTab(_Pages):
+    def ask(self):
+        page = self.get(self.assoc, "/me/breaks", change=0)
+        first = re.search(r'name="to" value="([0-9:]+)"(?! disabled)', page).group(1)
+        self.post(self.assoc, "/me/breaks", idx=0, to=first, why="Made-up: appointment")
+        return self.store.list_change_requests()[-1]["id"]
+
+    def test_the_rta_tab_has_a_requests_view_with_the_count_and_the_decision_controls(self):
+        rid = self.ask()
+        day = self.get(self.staff, "/day", program=self.key, date="2026-10-14")
+        self.assertRegex(day, r'>Requests <span class="count">1</span>')
+        tab = self.get(self.staff, "/day", program=self.key, date="2026-10-14", view="requests")
+        self.assertIn("Break changes and coaching", tab)
+        self.assertIn("Made-up: appointment", tab)
+        self.assertIn("Approve as asked", tab)
+        self.assertIn(f"/requests/change/{rid}", tab)
+        self.assertRegex(tab, r'name="back" value="/day\?')
+
+    def test_deciding_from_the_tab_comes_back_to_the_tab(self):
+        rid = self.ask()
+        got = self.post(self.staff, f"/requests/change/{rid}", decision="approve",
+                        back=f"/day?program={self.key.replace(' ', '+')}&date=2026-10-14&view=requests")
+        self.assertEqual(got.status_code, 303)
+        self.assertIn("view=requests", got.headers["Location"])
+        self.assertEqual(self.store.get_change_request(rid)["status"], "approved")
+
+    def test_a_back_address_off_the_site_is_ignored(self):
+        rid = self.ask()
+        got = self.post(self.staff, f"/requests/change/{rid}", decision="approve", back="https://evil.example/x")
+        self.assertTrue(got.headers["Location"].startswith("/requests"))
+
+    def test_the_tab_is_for_one_lob_so_the_merged_view_sends_you_to_the_timeline(self):
+        got = self.staff.get("/day", query_string={"program": self.key, "date": "2026-10-14", "view": "requests",
+                                                   "merge": "1"})
+        self.assertIn(got.status_code, (200, 303))
+        if got.status_code == 303:
+            self.assertNotIn("view=requests", got.headers["Location"])
+
+    def test_someone_who_cannot_change_the_day_sees_the_list_without_the_buttons(self):
+        self.ask()
+        tab = self.get(self.tm, "/day", program=self.key, date="2026-10-14", view="requests")
+        self.assertNotIn("Approve as asked", tab)
+
+
+class TheAssociatesTabs(_Pages):
+    def test_both_pages_carry_the_two_tabs(self):
+        for url, here in (("/me/breaks", "Today"), ("/me", "Weeks")):
+            page = self.get(self.assoc, url)
+            self.assertRegex(page, r'<nav class="tabs" aria-label="My pages">')
+            self.assertRegex(page, rf'class="on" aria-current="page">{here}</a>')
+            self.assertIn(">Today</a>", page)
+            self.assertIn(">Weeks</a>", page)
+
+    def test_today_holds_the_shift_the_breaks_and_the_requests_and_weeks_does_not_hold_today(self):
+        today = self.get(self.assoc, "/me/breaks")
+        self.assertIn("Your breaks", today)  # Re-pinned in Phase AU: the second panel is named for what it holds
+        self.assertIn("Break 1", today)
+        weeks = self.get(self.assoc, "/me")
+        self.assertIn("The week", weeks)
+        self.assertIn("Request leave", weeks)
+        self.assertNotIn('id="today-h"', weeks)
+
+    def test_an_associate_lands_on_today(self):
+        got = self.assoc.get("/")
+        self.assertEqual(got.status_code, 302)
+        self.assertTrue(got.headers["Location"].endswith("/me/breaks"))
+
+    def test_the_menu_names_the_two_pages(self):
+        page = self.get(self.assoc, "/me")
+        self.assertRegex(page, r'(?s)<nav aria-label="Main">.*My day.*My weeks')
+
+
+class TheCoachingCancel(_Pages):
+    def ask(self):
+        self.post(self.tm, "/requests/coaching", program=self.key, date="2026-10-14", start="14:00", minutes="30",
+                  dept="Quality", why="Made-up", who=["Associate 027"])
+        return self.store.list_change_requests()[-1]
+
+    def test_the_team_manager_cancels_their_own_coaching_request(self):
+        row = self.ask()
+        self.assertEqual((row["kind"], row["status"]), ("coaching", "waiting"))
+        mine = self.get(self.tm, "/requests/coaching", program=self.key)
+        self.assertIn(f"/requests/coaching/{row['id']}/cancel", mine)
+        got = self.post(self.tm, f"/requests/coaching/{row['id']}/cancel")
+        self.assertEqual(got.status_code, 303)
+        self.assertEqual(self.store.get_change_request(row["id"])["status"], "cancelled")
+
+    def test_someone_else_cannot_cancel_it(self):
+        row = self.ask()
+        self.post(self.staff, f"/requests/coaching/{row['id']}/cancel")
+        self.assertEqual(self.store.get_change_request(row["id"])["status"], "waiting")
+        self.assertEqual(self.post(self.assoc, f"/requests/coaching/{row['id']}/cancel").status_code, 403)
+
+    def test_a_decided_request_has_no_cancel_button(self):
+        row = self.ask()
+        self.post(self.staff, f"/requests/change/{row['id']}", decision="reject", reason="Busy then")
+        self.assertNotIn(f"/requests/coaching/{row['id']}/cancel", self.get(self.tm, "/requests/coaching", program=self.key))
+
+
+class TheHomeMatchesTheRole(_Pages):
+    """Phase AU: the page offers what the role may do (a form the server would refuse is not offered)."""
+    def test_a_team_manager_without_the_runs_permission_is_not_offered_a_new_schedule(self):
+        home = self.get(self.tm, "/")
+        self.assertNotIn('id="newrun"', home)
+        self.assertNotIn("New schedule", home)
+        self.assertNotIn("week-check", home)
+
+    def test_a_planner_who_may_start_runs_still_is(self):
+        home = self.get(self.staff, "/")
+        self.assertIn('id="newrun"', home)
+
+
+class ThePolish(_Pages):
+    def test_the_coaching_list_has_a_search_box_and_scrolls(self):
+        page = self.get(self.tm, "/requests/coaching", program=self.key)
+        self.assertIn('data-filter="coach-list"', page)
+        self.assertIn('id="coach-list"', page)
+        self.assertIn("pick-list", page)
+
+    def test_a_break_request_reads_as_a_move(self):
+        page = self.get(self.assoc, "/me/breaks", change=0)
+        first = re.search(r'name="to" value="([0-9:]+)"(?! disabled)', page).group(1)
+        self.post(self.assoc, "/me/breaks", idx=0, to=first)
+        self.assertRegex(self.get(self.assoc, "/me/breaks"), r"Break 1, move from 13:00 to \d\d:\d\d")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TheMergedRequests(unittest.TestCase):
+    """Phase AU: the Requests tab in the view with every LOB of a program: one list, each request with its LOB."""
+    @classmethod
+    def setUpClass(cls):
+        from webapp.tests import test_ap_merge_day as fx
+        cls.fx = fx
+        fx._TwoLobs.setUpClass.__func__(cls)
+        for key, who in ((cls.one, "Associate 006"), (cls.two, "Associate B007")):
+            cls.store.add_change_request(
+                kind="coaching", program=key, shift_date=fx.WED.isoformat(), names=json.dumps([who]),
+                requester_id=1, requester_name="Made-up TM", why="Made-up",
+                detail=json.dumps({"start": 840, "end": 870, "minutes": 30, "dept": "Quality", "billable": False}))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fx._TwoLobs.tearDownClass.__func__(cls)
+
+    def setUp(self):
+        from unittest import mock
+        from webapp.tests.test_as_pages import _Noon
+        patch = mock.patch("webapp.app.datetime", _Noon)  # the rows are for Wednesday 14 October: a request is open until then
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def tab(self, **more):
+        query = {"program": self.one, "date": self.fx.WED.isoformat(), "tz": self.fx.CAIRO, "view": "requests", **more}
+        return html.unescape(self.admin.get("/day", query_string=query).get_data(as_text=True))
+
+    def test_the_merged_tab_lists_both_lobs_requests_with_the_lob_and_stays_merged(self):
+        page = self.tab(merge="1")
+        self.assertIn("Associate 006", page)
+        self.assertIn("Associate B007", page)
+        self.assertRegex(page, r'class="tl-tag lob">Tier 1<')
+        self.assertRegex(page, r'class="tl-tag lob">Tier 2<')
+        self.assertRegex(page, r'name="back" value="/day\?[^"]*merge=1')
+        self.assertRegex(page, r'Requests <span class="count">2</span>')
+
+    def test_one_lob_shows_only_its_own(self):
+        page = self.tab()
+        self.assertIn("Associate 006", page)
+        self.assertNotIn("Associate B007", page)
+
+
+import html  # noqa: E402
+import json  # noqa: E402

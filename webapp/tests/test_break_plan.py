@@ -158,6 +158,16 @@ class TheBreakPlan(unittest.TestCase):
         seg = next(s for s in lane["segments"] if s["offset"] == 0)
         self.assertEqual([b["start"] for b in seg["breaks"]], plan[name])
 
+    def test_suggest_puts_every_break_in_the_usual_shape_and_inside_the_rules_where_the_floor_has_room(self):
+        # Phase AX (owner, 2026-10-22: the default timing makes the most sense): on the fixture day nobody is short, so the whole
+        # plan is at no distance from the usual shape or from the engine's rules
+        from webapp.break_plan import fit
+        got = suggest(self.week, self.inputs, self.rules, WED, {})
+        far = [fit(self.rules, a["days"][WED], got[a["name"]]) for a in self.week["associates"]
+               if shift_span(a["days"][WED]) and a["name"] in got]
+        self.assertTrue(far)
+        self.assertEqual({f for f in far}, {(0, 0)})
+
 
 class TheBreakPlanPage(unittest.TestCase):
     @classmethod

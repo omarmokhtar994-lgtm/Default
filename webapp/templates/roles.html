@@ -1,0 +1,33 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AK (owner, 2026-10-15: "make it adjustable"): what each role may see and do, set by an admin. #}
+{% extends "base.html" %}{% block title %}Roles on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>Roles</h1>
+  <p class="byline">What planners, team managers and supervisors may see and do. Admins can do everything; associates see My week only. The website checks these on every page and every change, not only in the menu.</p>
+</div></div>
+<section class="panel" aria-labelledby="roles-h">
+  <h2 id="roles-h">What each role may do</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="What each role may do (scrolls)"><table class="actable">
+      <thead><tr><th scope="col">Allows</th>{% for r in role_names %}<th scope="col" class="c">{{ r }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for key, (words, _) in catalogue.items() %}<tr><th scope="row">{{ words }}</th>
+        {% for r in role_names %}<td class="c"><input type="checkbox" name="allow" value="{{ r }}|{{ key }}" aria-label="{{ r }}: {{ words }}"{% if grid[r][key] %} checked{% endif %}></td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="note">A team manager approves their own team's leave and swaps; a supervisor with the first approval can approve for any team. Pages only admins use (Notifications, LOBs and defaults, Roles) stay with admins.</p>
+    <div class="btnrow"><button type="submit" class="primary">Save roles</button></div>
+  </form>
+</section>
+<section class="panel" aria-labelledby="reset-h">
+  <h2 id="reset-h">Back to the defaults</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="reset" value="1">
+    <label class="tick"><input type="checkbox" name="confirm" value="1" required> I understand that every role goes back to what it could do at first, for everyone, and the ticks above are lost.</label>
+    <div class="btnrow"><button type="submit">Put every role back to the defaults</button></div>
+  </form>
+</section>
+{% endblock %}

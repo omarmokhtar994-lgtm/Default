@@ -145,6 +145,8 @@ def declared_artifact_type(path: Path) -> Optional[str]:
                                           "balanced_candidate","safer_balanced_candidate",
                                           # the selected schedule, polished (F-35)
                                           "more_consistent_candidate",
+                                          # Phase BE: the selected schedule with preference swaps
+                                          "preference_candidate",
                                           # audit F-06: a full after-break schedule
                                           # that names its own shortfalls
                                           "hard_rule_shortfall_schedule"}:
@@ -991,10 +993,14 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
             # only for OFF). The REQUIRED_LANGUAGE_ONLY exclusivity check used to
             # sit inside an ALL_ROWS/MINIMUM_ROWS branch and could never run, so
             # that mode's rules were not validated at all.
+            # Phase BL: a Shift Length named on the Schedule row is a hard rule (the engine's models, the polish and swap steps all keep it).
+            if kind=="shift" and not eng.shift_length_allows(assoc, shift_map[norm(value)]):
+                failures.append({"type":"SHIFT_LENGTH_VIOLATION","associate":assoc.name,"day":DAYS[d],"shift":value,
+                                 "expected_minutes":assoc.shift_minutes,"actual_minutes":shift_map[norm(value)].duration_min})
             if kind=="shift" and parsed.language_working_window_mode in {"ALL_ROWS", "MINIMUM_ROWS", "REQUIRED_LANGUAGE_ONLY"}:
                 entries = eng.associate_language_windows(parsed, assoc, day=d)
                 if entries and not any(
-                    eng.shift_within_language_window(shift_map[norm(value)], window)
+                    eng.language_window_allows(parsed, shift_map[norm(value)], window)
                     for window in entries
                 ):
                     failures.append({
@@ -1033,7 +1039,8 @@ def validate(input_path: Path, output_path: Path, engine_path: Path,
         expected_off=eng.required_off_days(parsed,assoc,long_mode)
         if parsed.strict_off and len(off_days)!=expected_off:
             failures.append({"type":"OFF_COUNT_VIOLATION","associate":assoc.name,"expected":expected_off,"actual":len(off_days),"off_days":[DAYS[d] for d in off_days]})
-        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2:
+        # Phase BD (owner, 2026-10-29): an associate whose own Preference row names hard OFF days that are not next to each other keeps them
+        if parsed.strict_off and not parsed.separate_off_days and expected_off>=2 and not eng.separate_off_in_preference(parsed,assoc):
             consecutive=any(d in off_days and (d+1)%7 in off_days for d in range(7))
             if not consecutive: failures.append({"type":"CONSECUTIVE_OFF_VIOLATION","associate":assoc.name,"off_days":[DAYS[d] for d in off_days]})
         distinct=len({norm(s.label) for _,s in shift_days})

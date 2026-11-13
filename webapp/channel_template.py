@@ -26,6 +26,10 @@ SETTINGS = [
     ("How strict is the order", "Strict", "Strict: a channel earlier in the order always comes first. Balanced: a "
      "long gap on a later channel can outweigh a short gap on an earlier one."),
     ("Spread channels fairly over the week", "Yes", "Each person gets a fair share of each channel they can work."),
+    ("Keep each person on the same channel through the day", "No", "Yes: avoid changing a person's channel "
+     "during the day, also across breaks, when coverage allows."),
+    ("Balance each person's channels through the day", "No", "Yes: a couple of hours on one channel, then another, "
+     "and few changes in between. If both this and the row above are Yes, this one is used."),
 ]
 ORDERS = ["Phone > Chat > Email", "Phone > Email > Chat", "Chat > Phone > Email", "Chat > Email > Phone",
           "Email > Phone > Chat", "Email > Chat > Phone"]
@@ -111,7 +115,10 @@ def _lists(ws, step: int, languages: List[str]) -> dict:
     for col, label, values in (("X", "Times", times), ("Y", "Days", DAY_CHOICES), ("Z", "Languages", languages)):
         ws[f"{col}4"] = label
         for i, value in enumerate(values, start=5):
-            ws[f"{col}{i}"] = value
+            cell = ws[f"{col}{i}"]
+            cell.value = value
+            if cell.data_type == "f":  # a language name typed as "=..." stays text (audit 2026-11-11)
+                cell.data_type = "s"
         ws.column_dimensions[col].hidden = True
         out[label] = f"${col}$5:${col}${4 + max(len(values), 1)}"
     return out

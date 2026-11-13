@@ -1,0 +1,188 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+"""Phase AV (owner, 2026-10-22: an analysis tab per associate, LOB and program with the count and duration of each
+incident, absenteeism, shrinkage and in-office shrinkage). The sums behind the Incidents page, on made-up data: Wednesday
+14 Oct has Associate 001 late 60 minutes, Associate 008's break 2 moved and missed, Associate 021 out from 15:00 and a
+coaching session; Thursday 15 Oct has Associate 001 sick."""
+import shutil
+import tempfile
+import unittest
+from datetime import date
+from pathlib import Path
+
+from webapp import insights
+from webapp.attendance import DayBook
+from webapp.schedules import ScheduleBook
+from webapp.store import Store
+from webapp.tests.test_schedules import AFTER, INPUT, REPO
+
+WED, THU = date(2026, 10, 14), date(2026, 10, 15)
+KEY = "AE/AR B2B"
+
+
+class TheInsights(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.base = Path(tempfile.mkdtemp())
+        store = Store(cls.base / "scheduler.db")
+        cls.sara = store.add_user("sara", "Sara", "Sara-pass-1", must_change=False)
+        cls.lina = store.add_user("lina", "Lina", "Lina-pass-1", must_change=False)
+        store.add_run("aaaaaaaaaaaa", cls.sara, "AR_week.xlsx", "QUICK", "DONE", program=KEY, week_start="2026-10-11")
+        ScheduleBook(store, cls.base, REPO).ensure(store.get_run("aaaaaaaaaaaa"), INPUT, AFTER, None)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.base, True)
+
+    def setUp(self):
+        self.data = Path(tempfile.mkdtemp()) / "data"
+        self.addCleanup(shutil.rmtree, self.data.parent, True)
+        shutil.copytree(self.base, self.data)
+        self.store = Store(self.data / "scheduler.db")
+        self.days = DayBook(self.store, ScheduleBook(self.store, self.data, REPO))
+        self.days.set_status(KEY, WED, "Associate 001", "Late", self.sara, end="13:00")
+        self.days.set_status(KEY, THU, "Associate 001", "Sick", self.lina)
+        self.days.move_break(KEY, WED, "Associate 008", 1, "13:10", self.lina, missed=True)
+        self.days.set_status(KEY, WED, "Associate 021", "Left early", self.sara, start="15:00")
+        self.leave = None
+        self.facts = insights.collect(self.days, self.store, self.leave, {KEY: ("AE", "AR B2B")}, WED, THU, "interval")
+
+    def of(self, name, on=None):
+        return [r for r in self.facts if r["name"] == name and (on is None or r["date"] == on.isoformat())]
+
+    def test_late_counts_with_its_minutes(self):
+        r = self.of("Associate 001", WED)[0]
+        self.assertEqual(r["inc"]["late"], [1, 60])
+
+    def test_left_early_counts_with_its_minutes(self):
+        self.assertEqual(self.of("Associate 021", WED)[0]["inc"]["early"], [1, 120])
+
+    def test_a_missed_break_counts_with_the_break_length(self):
+        n, minutes = self.of("Associate 008", WED)[0]["inc"]["missed_break"]
+        self.assertEqual(n, 1)
+        self.assertGreater(minutes, 0)
+
+    def test_sick_is_a_day_with_the_shift_length(self):
+        n, minutes = self.of("Associate 001", THU)[0]["inc"]["sick"]
+        self.assertEqual((n, minutes), (1, 9 * 60))  # 12:00 - 21:00
+
+    def test_a_coaching_session_counts_as_coaching(self):
+        names = ["Associate 021", "Associate 037"]
+        start = next(s["start"] for s in self.days.meeting_slots(KEY, WED, names, 30, "09:00", "14:00"))
+        self.days.book_session(KEY, WED, names, start, 30, "Coaching", self.sara, with_whom="Team lead", why="Weekly")
+        facts = insights.collect(self.days, self.store, None, {KEY: ("AE", "AR B2B")}, WED, WED, "interval")
+        got = {r["name"]: r["inc"]["coaching"] for r in facts if r["name"] in names}
+        self.assertEqual(got, {n: [1, 30] for n in names})
+
+    def test_figures_sum_the_rows(self):
+        f = insights.figures(self.facts)
+        self.assertEqual(f["incidents"]["late"], {"n": 1, "min": 60})
+        self.assertEqual(f["incidents"]["sick"], {"n": 1, "min": 540})
+        self.assertEqual(f["absenteeism"], round(100 * 1 / f["shifts"], 1))
+        self.assertTrue(0 <= f["adherence"] <= 100)
+        self.assertGreater(f["shrink_in"], 0)
+
+    def test_grouping_by_associate_puts_the_most_incidents_first(self):
+        rows = insights.grouped(self.facts, "associates")
+        self.assertEqual(rows[0]["total"], max(r["total"] for r in rows))
+        self.assertEqual({r["name"] for r in rows}, {r["name"] for r in self.facts})
+
+    def test_grouping_by_lob_and_program_each_give_one_row_here(self):
+        self.assertEqual([r["name"] for r in insights.grouped(self.facts, "lobs")], ["AR B2B"])
+        self.assertEqual([r["name"] for r in insights.grouped(self.facts, "programs")], ["AE"])
+
+    def test_the_trend_has_a_point_per_day_with_records(self):
+        self.assertEqual([d["date"] for d in insights.trend(self.facts)], ["2026-10-14", "2026-10-15"])
+
+    def test_one_person_lists_their_days(self):
+        p = insights.person(self.facts, "Associate 001")
+        self.assertEqual([d["date"] for d in p["days"]], ["2026-10-15", "2026-10-14"])
+        self.assertEqual(p["incidents"]["late"]["n"], 1)
+
+    # Phase AX (owner, 2026-10-22): a moved break is the schedule; only a break ticked as missed is out of adherence
+    def lost(self, name, on=WED):
+        r = self.of(name, on)[0]
+        return r["adh_den"] - r["adh_num"]
+
+    def test_a_missed_break_is_out_of_adherence_for_the_break_length(self):
+        minutes = self.of("Associate 008", WED)[0]["inc"]["missed_break"][1]
+        self.assertEqual(self.lost("Associate 008"), minutes)
+
+    def test_a_break_moved_without_the_tick_costs_no_adherence(self):
+        taken = {"Associate 001", "Associate 008", "Associate 021"}
+        name, brk = next((l["name"], s["breaks"][-1]) for l in self.days.page(KEY, WED)["view"]["lanes"]
+                         if l["name"] not in taken for s in l["segments"]
+                         if s["offset"] == 0 and s["status"] == "Present" and s["breaks"])
+        for step in (10, -10, 15, -15, 20, -20):
+            try:
+                self.days.move_break(KEY, WED, name, brk["idx"], f"{(brk['start'] + step) // 60 % 24:02d}:{(brk['start'] + step) % 60:02d}", self.lina)
+                break
+            except ValueError:
+                continue
+        facts = insights.collect(self.days, self.store, None, {KEY: ("AE", "AR B2B")}, WED, THU, "interval")
+        r = next(r for r in facts if r["name"] == name and r["date"] == WED.isoformat())
+        now = next(b for l in self.days.page(KEY, WED)["view"]["lanes"] if l["name"] == name for s in l["segments"]
+                   if s["offset"] == 0 for b in s["breaks"] if b["idx"] == brk["idx"])
+        self.assertTrue(now["moved"])  # it really was moved, so the zero below says something
+        self.assertEqual(r["adh_den"] - r["adh_num"], 0)
+
+    def test_ticking_the_same_break_twice_counts_it_once(self):
+        before = self.lost("Associate 008")
+        self.days.move_break(KEY, WED, "Associate 008", 1, "13:15", self.lina, missed=True)
+        facts = insights.collect(self.days, self.store, None, {KEY: ("AE", "AR B2B")}, WED, THU, "interval")
+        r = next(r for r in facts if r["name"] == "Associate 008" and r["date"] == WED.isoformat())
+        self.assertEqual(r["adh_den"] - r["adh_num"], before)
+
+    def test_out_of_adherence_is_not_an_incident_any_more(self):
+        self.assertNotIn("non_adherence", [k for k, _ in insights.KINDS])
+        self.assertNotIn("non_adherence", insights.BEHAVIOUR)
+        for r in self.facts:
+            self.assertNotIn("non_adherence", r["inc"])
+
+
+class ThePatterns(TheInsights):  # noqa
+    def test_weekdays_put_wednesday_and_thursday_where_the_records_are(self):
+        w = {d["day"]: d for d in insights.weekdays(self.facts)}
+        self.assertGreater(w["Wed"]["total"], 0)
+        self.assertEqual(w["Fri"]["rate"], None)
+
+    def test_repeats_need_the_same_incident_the_minimum_times(self):
+        again = [dict(r, date="2026-10-15") if r["name"] == "Associate 001" and r["date"] == "2026-10-14" else r for r in self.facts]
+        late = [dict(r, date=d) for r in self.facts if r["name"] == "Associate 001" and r["inc"]["late"][0]
+                for d in ("2026-10-11", "2026-10-12")]
+        found = insights.repeats(self.facts + late, 3)
+        self.assertEqual([(r["name"], r["kind"], r["n"]) for r in found if r["name"] == "Associate 001"], [("Associate 001", "late", 3)])
+        self.assertEqual(insights.repeats(self.facts, 3), [])
+
+
+class ThePlannedLeave(unittest.TestCase):
+    """Associate 090 has Leave on the schedule and Associate 091 has an approved public holiday there: only the first is
+    planned leave (a public holiday counts for the client's shrinkage, not as an incident)."""
+    def page(self):
+        week = {"associates": [{"name": "Associate 090", "days": ["Leave"] * 7},
+                               {"name": "Associate 091", "days": ["Leave"] * 7}]}
+        return {"view": {"lanes": [], "measure": "interval", "interval": 30}, "week": week, "day": 3, "date": WED}
+
+    def test_leave_cells_are_planned_leave_unless_they_are_a_holiday(self):
+        rows = insights.day_facts(self.page(), "K", "P", "L", insights.read_mapping(None),
+                                  {"Associate 091": "Public holiday"}, [])
+        self.assertEqual([r["name"] for r in rows], ["Associate 090"])
+        self.assertEqual(rows[0]["inc"]["planned"], [1, 0])
+        self.assertEqual(rows[0]["out"], 1)  # planned leave counts toward out-of-office shrinkage
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TheAbsenteeismViews(TheInsights):  # noqa
+    """Sick counts for the RTA and the client; Sutherland leaves it to shrinkage; the kinds are the user's to pick."""
+    def test_sick_counts_in_the_client_view_and_not_in_sutherlands(self):
+        client = insights.figures(self.facts, ("unplanned", "sick"))
+        suth = insights.figures(self.facts, ("unplanned",))
+        self.assertEqual(client["absenteeism"], round(100 * 1 / client["shifts"], 1))
+        self.assertEqual(suth["absenteeism"], 0.0)
+        self.assertEqual(client["shrink_out"], suth["shrink_out"])  # sick stays in shrinkage either way
+
+    def test_any_pick_is_kept_in_order_and_nothing_valid_falls_back(self):
+        self.assertEqual(insights.absent_kinds(["sick", "planned", "x"]), ("sick", "planned"))
+        self.assertEqual(insights.absent_kinds([]), ("unplanned", "sick"))

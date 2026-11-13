@@ -17,7 +17,8 @@ ICONS = ["house", "gauge", "pulse", "television", "calendar-blank", "stack", "ch
          "download-simple", "users", "user-gear", "address-book", "headset", "bell", "tree-structure", "tray",
          "calendar-check", "plus", "check-circle", "warning", "magnifying-glass", "caret-left", "caret-right",
          "globe-hemisphere-west", "arrow-u-up-left", "airplane-tilt", "arrows-left-right", "x-circle", "clock", "sun",
-         "moon", "sign-out", "gear", "lifebuoy", "user-circle", "list", "chart-bar"]
+         "moon", "sign-out", "gear", "lifebuoy", "user-circle", "list", "chart-bar",
+         "chart-pie-slice", "warning-circle", "palette"]  # Phase BA: Shrinkage, Incidents, the look control
 # the menu: (selector for the link, icon); later rules win, so the more specific address comes after
 MENU = [('a[href="/"]', "house"), ('a[href^="/overview"]', "gauge"), ('a[href^="/day"]', "pulse"),
         ('a[href^="/day/wallboard"]', "television"), ('a[href^="/week"]', "calendar-blank"),
@@ -25,7 +26,8 @@ MENU = [('a[href="/"]', "house"), ('a[href^="/overview"]', "gauge"), ('a[href^="
         ('a[href^="/exports"]', "download-simple"), ('a[href^="/team"]', "users"), ('a[href^="/admin/users"]', "user-gear"),
         ('a[href^="/setup/with"]', "address-book"), ('a[href^="/setup/channels"]', "headset"),
         ('a[href^="/notifications"]', "bell"), ('a[href^="/setup/programs"]', "tree-structure"),
-        ('a[href^="/requests"]', "tray"), ('a[href^="/me"]', "calendar-check")]
+        ('a[href^="/requests"]', "tray"), ('a[href^="/me"]', "calendar-check"), ('a[href^="/admin/roles"]', "gear"),
+        ('a[href^="/shrinkage"]', "chart-pie-slice"), ('a[href^="/incidents"]', "warning-circle")]
 
 
 def main(folder: Path) -> None:

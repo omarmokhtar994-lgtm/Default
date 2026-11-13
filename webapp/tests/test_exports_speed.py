@@ -87,9 +87,11 @@ class TheExportWork(unittest.TestCase):
         asked = []
         real = DayBook.page
 
-        def counting(days, program, on, measure="interval", extra=None):
+        # Re-pinned in Phase AJ: page() takes ``cover`` (the export's tick for cover from outside the roster); what
+        # is counted is unchanged
+        def counting(days, program, on, measure="interval", extra=None, cover=True):
             asked.append((program, on, measure))
-            return real(days, program, on, measure, extra)
+            return real(days, program, on, measure, extra, cover=cover)
 
         with mock.patch.object(DayBook, "page", counting):
             build(self.store, self.days, WED, THU, kinds=["worked", "summary"], program="AE/AR B2B")

@@ -13,6 +13,7 @@ thing is being sent to the associates on the notification channel ... the time s
   the day's records, its change log and the group posts keep the schedule's time.
 Made-up "Associate NN" data.
 """
+import html
 import re
 import unittest
 from datetime import date, timedelta
@@ -229,6 +230,18 @@ class OneCalendarDay(unittest.TestCase):
     def test_the_other_tabs_work_on_the_schedules_day_in_the_zone(self):
         page = self.get(tz="America/New_York", start="16:00", view="cover")
         self.assertIn("work on the schedule's day", page)
+
+    def test_the_note_on_those_tabs_reads_as_information_not_as_an_error(self):
+        # owner, 2026-10-29: a team member took it for an error ("00:00 to 00:00 the next day", in the warning colour)
+        page = self.get(start="13:00", view="cover")
+        note = re.search(r'<p class="notice[^"]*">(Find a time, Overtime and Channels.*?)</p>', page, re.S)
+        self.assertIsNotNone(note)
+        text = html.unescape(note.group(1))
+        self.assertIn("work on the schedule's day", text)
+        self.assertNotIn("00:00 to 00:00", text)
+        self.assertIn("midnight to midnight", text)
+        self.assertIn("show the 24 hours from 13:00 instead", text)
+        self.assertIn('<p class="notice calm">', page)  # not the amber warning look
 
     def test_the_operating_day_is_one_of_the_starts(self):
         self.store.set_day_start(self.key, 16 * 60, self.omar)

@@ -1,0 +1,5 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+<nav class="tabs" aria-label="My pages">
+  <a href="{{ url_for('me_breaks') }}"{% if here == 'today' %} class="on" aria-current="page"{% endif %}>Today</a>
+  <a href="{{ url_for('me') }}"{% if here == 'weeks' %} class="on" aria-current="page"{% endif %}>Weeks</a>
+</nav>

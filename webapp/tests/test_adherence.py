@@ -25,15 +25,18 @@ class TheAdherence(unittest.TestCase):
         self.assertEqual(row["scheduled"], span[1] - span[0])
         self.assertEqual(row["scheduled_work"], row["scheduled"] - row["breaks_planned"])
 
-    def test_moved_break_costs_adherence_not_conformance(self):
+    def test_moved_break_costs_neither_adherence_nor_conformance(self):
         b = next(b for b in WEEK["breaks"] if b["day"] == "Wed" and b["kind"] == "Lunch" and b["start"].endswith(":00"))
         lanes = {l["name"]: l for l in view()["lanes"]}
         idx = next(x["idx"] for s in lanes[b["associate"]]["segments"] if s["offset"] == 0 for x in s["breaks"]
                    if x["kind"] == "Lunch")
         row = person_day(view(actual={(0, b["associate"], idx): minute(b["start"]) + 60}), b["associate"])
-        self.assertEqual(row["out_of_schedule"], 2 * b["minutes"])  # on a break when due to work, and the reverse
+        # Re-pinned (Phase AX, owner 2026-10-22: "remove that part for break time changes, stick to what was scheduled in
+        # RTA"): a break moved in the RTA is the schedule now, so moving it costs no adherence (it used to cost twice the
+        # break: the old time as work and the new time as a break). Only a break ticked as missed does (test_ax_adherence).
+        self.assertEqual(row["out_of_schedule"], 0)
         self.assertEqual(row["conformance"], 100)
-        self.assertEqual(row["adherence"], round(100 * (row["scheduled"] - 2 * b["minutes"]) / row["scheduled"]))
+        self.assertEqual(row["adherence"], 100)
 
     def test_late_costs_both(self):
         person, span = someone(WED, 20 * 60, starts_by=18 * 60 + 30)

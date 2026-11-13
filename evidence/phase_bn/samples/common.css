@@ -1,0 +1,14 @@
+/* © 2026 Omar Mokhtar. All rights reserved. Phase BN samples: shared by the three luxury looks (injected over the real pages). */
+@view-transition { navigation: auto; }                      /* pages cross-fade into each other: plain CSS, no script */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; animation-timing-function: cubic-bezier(.23, 1, .32, 1); }
+h1, h2, h3 { font-weight: 600; letter-spacing: -.012em; }
+h1 { font-size: 2.125rem; }
+.panel { border-radius: var(--r-panel); padding: 26px 28px; }
+button, .button { border-radius: var(--r-ctl); transition: background-color .14s ease, border-color .14s ease, transform .1s cubic-bezier(.23, 1, .32, 1); }
+button:active, .button:active { transform: scale(.98); }
+input, select, textarea { border-radius: var(--r-ctl); transition: border-color .14s ease, box-shadow .14s ease; }
+a, .tabs a, .leftnav nav a { transition: background-color .14s ease, color .14s ease; }
+.tabs a.on, .exp-presets a.on, .bp-days a.on, .bp-days button.on, .shiftbar a.on { box-shadow: inset 0 -2px 0 var(--hi); border-color: transparent; }
+.leftnav nav a.on, .vbar a.cur, .mode:has(input:checked) { box-shadow: inset 3px 0 0 var(--hi); }
+:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }

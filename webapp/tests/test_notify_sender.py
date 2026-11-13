@@ -323,7 +323,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.path == "/slow":
+            # AN followup: this request deliberately exceeds the client's timeout.
+            # Do not write to the disconnected client and emit a spurious traceback.
             time.sleep(2)
+            return
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"ok")
@@ -342,6 +345,7 @@ class TheTransport(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()  # AN followup: release the test listener as well as its loop.
 
     def test_send_json_posts_json_and_follows_no_redirect(self):
         _Handler.hits.clear()

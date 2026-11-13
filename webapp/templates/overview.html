@@ -60,3 +60,4 @@
 {% endif %}
 {% include "_outlook.html" %}
 {% endblock %}
+{% block live %}{% from '_live.html' import watch %}{% if program %}{{ watch('day', 'reload', program, on.isoformat()) }}{% endif %}{% endblock %}

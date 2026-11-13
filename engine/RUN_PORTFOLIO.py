@@ -216,6 +216,24 @@ def run_seed(seed: int, schedule_id: str, seeds_root: Path, passthrough: List[st
     return run_dir, rc
 
 
+def seed_return_code(run_dir: Path) -> Optional[int]:
+    """Phase AY: the return code of a seed that has already finished, read from the engine's last file; None when it has not.
+
+    The engine writes UNIVERSAL_RUN_STATUS.json before packaging and again at the very end, with ``top_level_copies`` in it.
+    Only the second one proves the seed ran to its end, so a seed stopped part way (the runner's time cap) has no return code
+    and never counts. Used by --collect-only, which reads seeds that nobody is waiting for any more."""
+    try:
+        status = json.loads((Path(run_dir) / "UNIVERSAL_RUN_STATUS.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(status, dict) or "top_level_copies" not in status or status.get("return_code") is None:
+        return None
+    try:
+        return int(status["return_code"])
+    except (TypeError, ValueError):
+        return None
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -265,6 +283,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         "cores >= parallel x workers.")
     p.add_argument("--output-root", type=Path, default=ROOT / "results")
     p.add_argument("--schedule-id", required=True)
+    p.add_argument("--collect-only", action="store_true",
+                   help="Run no seed: read the seed folders that are already there, keep the ones that finished, choose the "
+                        "winners and write the summary (the Colab runner does this when its time cap stops a portfolio).")
     args, passthrough = p.parse_known_args(argv)
     for forbidden in ("--output-root", "--schedule-id", "--solver-random-seed"):
         if forbidden in passthrough:
@@ -289,9 +310,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             return list(passthrough) + ["--stage1-profile-rotation", f"{index}/{len(seeds)}"]
         return list(passthrough)
 
-    with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
-        runs = list(pool.map(lambda item: run_seed(item[1], args.schedule_id, seeds_root, seed_arguments(item[0]), case_root),
-                             enumerate(seeds)))
+    if args.collect_only:
+        runs = []
+        for seed in seeds:
+            run_dir = seeds_root / safe_id(f"{args.schedule_id}_S{seed}")
+            runs.append((run_dir, seed_return_code(run_dir)))
+            print(f"[portfolio] seed {seed}: " + ("finished" if runs[-1][1] is not None else "not finished, left out"),
+                  flush=True)
+    else:
+        with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
+            runs = list(pool.map(lambda item: run_seed(item[1], args.schedule_id, seeds_root, seed_arguments(item[0]), case_root),
+                                 enumerate(seeds)))
     results = []
     for seed, (run_dir, rc) in zip(seeds, runs):
         r = read_seed_result(run_dir, rc)
@@ -304,6 +333,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "seeds": seeds,
         "preset": args.preset,
         "diversify_profiles": bool(args.diversify_profiles),
+        "collected_after_timeout": bool(args.collect_only),
         "passthrough_arguments": passthrough,
         "after_breaks_winner_seed": winners["after"]["seed"] if winners["after"] else None,
         "before_breaks_winner_seed": winners["before"]["seed"] if winners["before"] else None,

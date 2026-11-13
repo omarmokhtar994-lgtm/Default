@@ -1,0 +1,33 @@
+{
+ "missing_units": [
+  "DayBook page/window builders and break rule engines (break_plan.py, window_tools.py, bulk_breaks.py, week.py)",
+  "Run start/start_from, options['language_window'] to validator subprocess, gate.ensure execution context",
+  "Leave and swap application writing schedule versions and on_kept hook (leave.change_many, swaps.swap_day, set_in_use without _may_set_in_use; approver role/program/self-approval at apply time)",
+  "Analytics/outlook/results/outcome/adherence compute modules and routes/analytics.py handlers",
+  "Page-builder modules (program_page, shrink_page, insights_page, merge, paging, eta, clock)",
+  "Volumes helper modules (volumes_formulas, volumes_grain, volumes_zone, forecast_methods) and break_rules_cli subprocess reading planner workbooks",
+  "Shipped template workbooks webapp/workbooks/*.xlsx (needs unzip-level review)"
+ ],
+ "unreviewed_files": [
+  "webapp/adherence.py",
+  "webapp/analytics.py",
+  "webapp/break_plan.py",
+  "webapp/clock.py",
+  "webapp/eta.py",
+  "webapp/forecast_methods.py",
+  "webapp/insights_page.py",
+  "webapp/merge.py",
+  "webapp/outcome.py",
+  "webapp/outlook.py",
+  "webapp/paging.py",
+  "webapp/program_page.py",
+  "webapp/results.py",
+  "webapp/shrink_page.py",
+  "webapp/volumes_formulas.py",
+  "webapp/volumes_grain.py",
+  "webapp/volumes_zone.py",
+  "webapp/week.py",
+  "webapp/window_tools.py"
+ ],
+ "notes": "Coverage partial: 19 of about 75 webapp modules are in no unit's reviewed_paths. The most valuable remaining gap is the leave/swap approval path writing schedule versions and setting them in use without _may_set_in_use; next run_start with gate.py and validator-subprocess options; third the unreviewed compute and page modules taking request parameters the app.py program check may not see. Based on file-list and ledger comparison only."
+}

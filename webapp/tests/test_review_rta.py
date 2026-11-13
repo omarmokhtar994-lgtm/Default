@@ -56,7 +56,7 @@ class TheTick(_Page):
             dialog = self.dialog()
             self.assertIn('data-post-kinds="break overtime"', dialog)
             for what, kind in (("Sick", "private"), ("Coaching", "aux"), ("Overtime", "overtime"),
-                               ("Break", "added_break"), ("Late", "late"), ("VTO", "overtime")):
+                               ("Break", "added_break"), ("Late", "late")):  # re-pinned (Phase AY): VTO is no longer offered
                 self.assertIn(f'<label class="k" data-kind="{kind}"><input type="radio" name="what" value="{what}"', dialog)
             brk = re.search(r'(?s)<dialog id="break-dialog".*?</dialog>', self.page()).group(0)
             self.assertIn('class="post-tick"', brk)

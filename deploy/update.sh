@@ -17,7 +17,9 @@ VENV="$APP_DIR/venv"
 ZIP="${1:-}"
 
 fail() { printf '\nUPDATE STOPPED: %s\n' "$*" >&2; exit 1; }
-as_scheduler() { runuser -u scheduler -- env PYTHONPATH="$APP_DIR/package" PATH="$VENV/bin:$PATH" "$@"; }
+# the code is read-only to this account (seal_package.sh), so nothing it runs may compile or cache into it
+as_scheduler() { runuser -u scheduler -- env PYTHONPATH="$APP_DIR/package" PATH="$VENV/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 \
+                 PYTHONPYCACHEPREFIX="$DATA_DIR/cache/pycache" XDG_CACHE_HOME="$DATA_DIR/cache" RUFF_CACHE_DIR="$DATA_DIR/cache/ruff" "$@"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Run it with sudo:  sudo bash $0 <new package .zip>"; exit 1; }
 [ -n "$ZIP" ] && [ -f "$ZIP" ] || fail "give the new package ZIP, for example: sudo bash $0 ~/RC9_2_2_PRODUCTION_PACKAGE.zip"
@@ -55,7 +57,14 @@ rm -rf "$APP_DIR/package.previous"
 mv "$APP_DIR/package" "$APP_DIR/package.previous"
 cp -a "$NEW" "$APP_DIR/package"
 rm -rf "$APP_DIR/package/results"
-chown -R scheduler:scheduler "$APP_DIR/package"
+install -d -o scheduler -g scheduler -m 750 "$DATA_DIR/cache"
+# Root owns the code; the website's account reads and runs it and writes only $DATA_DIR (seal_package.sh says what it did and checks it)
+if ! bash "$APP_DIR/package/deploy/seal_package.sh" "$APP_DIR/package"; then
+  rm -rf "$APP_DIR/package"
+  mv "$APP_DIR/package.previous" "$APP_DIR/package"
+  systemctl start scheduler-web
+  fail "the new package could not be made read-only for the website's account; the previous version is running again."
+fi
 "$VENV/bin/pip" install --quiet -r "$APP_DIR/package/deploy/requirements.txt"
 if ! "$VENV/bin/python" "$APP_DIR/package/tools/runtime_environment_check.py"; then
   echo "The new package's runtime check failed: putting the previous package back."
@@ -69,6 +78,12 @@ sed -e "s|{{APP_DIR}}|$APP_DIR|g" -e "s|{{DATA_DIR}}|$DATA_DIR|g" \
 systemctl daemon-reload
 systemctl start scheduler-web
 echo "==> The website is running the new package."
+# what the service may really write, as systemd reports it: the data folder and nothing of the code
+WRITABLE="$(systemctl show scheduler-web --property=ReadWritePaths --value 2>/dev/null || true)"
+case " $WRITABLE " in
+  *" $APP_DIR/package "*|*" $APP_DIR "*|*" $APP_DIR/venv "*) printf '\nWARNING: the service may still write its code (%s). Check /etc/systemd/system/scheduler-web.service and run: sudo systemctl daemon-reload && sudo systemctl restart scheduler-web\n' "$WRITABLE" >&2; exit 1;;
+esac
+echo "==> Hardening: the service writes only: ${WRITABLE:-nothing listed}; the code is read-only to it."
 
 if [ -t 0 ]; then
   read -rp "Run the new package's safety gate now (15-30 minutes)? [Y/n] " WARM

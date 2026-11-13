@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
-from webapp.notify import (DEFAULT_KINDS, KINDS, Post, body_for, breaks_post, change_post, check_link, link_end,
+from webapp.notify import (DEFAULT_KINDS, KINDS, Post, bodies_for, body_for, breaks_post, change_post, check_link, link_end,
                            slack_body, teams_body)
 
 EGYPT = timezone(timedelta(hours=3))
@@ -67,9 +67,10 @@ class TheLinks(unittest.TestCase):
 
 class TheKinds(unittest.TestCase):
     def test_kinds_in_order_and_defaults(self):
-        self.assertEqual(list(KINDS), ["break", "added_break", "overtime", "called_in", "channel", "aux", "late"])
+        # Re-pinned in Phase AU (owner, 2026-10-21: answers to requests go to the group like the RTA's changes): "request"
+        self.assertEqual(list(KINDS), ["break", "added_break", "overtime", "called_in", "channel", "aux", "late", "request"])
         self.assertEqual(KINDS["break"], "Breaks and lunches moved, or put back to plan")
-        self.assertEqual(DEFAULT_KINDS, ["break", "added_break", "overtime", "called_in", "channel"])
+        self.assertEqual(DEFAULT_KINDS, ["break", "added_break", "overtime", "called_in", "channel", "request"])
 
 
 class ThePost(unittest.TestCase):
@@ -104,6 +105,32 @@ class ThePost(unittest.TestCase):
         post = self.post([item("Associate 008", "Overtime 17:00 to 18:00", when="19:19"),
                           item("Associate 019", "Lunch moved 12:15 to 12:45", when="19:10")])
         self.assertEqual([n for n, _ in post.sections[0][1]], ["Associate 019", "Associate 008"])
+
+    def test_only_the_latest_change_to_one_break_of_one_person_is_posted(self):
+        # Phase AU (owner, 2026-10-21): "X break 1 from 00:00 to 00:15 then X break 1 from 00:15 to 00:30: only the last"
+        first = dict(item("Associate 001", "Break 1 moved 00:00 to 00:15", when="09:40"), ref="break:Associate 001:0")
+        second = dict(item("Associate 001", "Break 1 moved 00:15 to 00:30", when="09:41"), ref="break:Associate 001:0")
+        other = dict(item("Associate 001", "Lunch moved 03:00 to 03:15", when="09:42"), ref="break:Associate 001:1")
+        mate = dict(item("Associate 002", "Break 1 moved 00:00 to 00:15", when="09:43"), ref="break:Associate 002:0")
+        post = self.post([first, second, other, mate])
+        self.assertEqual(post.sections[0][1], [("Associate 001", "Break 1 moved 00:15 to 00:30"),
+                                               ("Associate 001", "Lunch moved 03:00 to 03:15"),
+                                               ("Associate 002", "Break 1 moved 00:00 to 00:15")])
+
+    def test_changes_without_a_ref_are_all_kept(self):
+        post = self.post([item("Associate 001", "Overtime 17:00 to 18:00", when="09:40"),
+                          item("Associate 001", "Overtime 17:00 to 18:00", when="09:41")])
+        self.assertEqual(len(post.sections[0][1]), 2)
+
+    def test_a_person_whose_break_changed_gets_their_breaks_as_they_now_stand(self):
+        mine = dict(item("Associate 001", "Break 1 moved 00:00 to 00:15", when="09:40"), ref="break:Associate 001:0")
+        ot = item("Associate 002", "Overtime 17:00 to 18:00", when="09:41")
+        post = change_post("SAKS, NMG Tier 2", "2026-10-10", [mine, ot], "", "SAKS NMG Tier 2",
+                           finals={"Associate 001": "Break 1 00:15, Lunch 03:00, Break 3 05:30",
+                                   "Associate 002": "Break 1 12:00"})
+        self.assertEqual(post.sections[0][1], [("Associate 001", "Break 1 moved 00:00 to 00:15"),
+                                               ("Associate 001", "Breaks now: Break 1 00:15, Lunch 03:00, Break 3 05:30"),
+                                               ("Associate 002", "Overtime 17:00 to 18:00")])  # no break changed: no list
 
     def test_footer_for_several_people(self):
         post = self.post([item("Associate 001", "Break 1 moved 10:00 to 10:15", by="Sara", when="09:40"),
@@ -231,16 +258,20 @@ class TheSlackWorkflow(unittest.TestCase):
         self.assertNotIn(">", text)
         self.assertIn("Associate \u20391\u203a & 2", text)
 
-    def test_a_long_message_is_cut_with_a_note(self):
+    def test_a_long_message_goes_as_several_messages(self):
+        # re-pinned (Phase AY, owner, 2026-10-23: "those extra 47 lines couldn't be shown on Slack and associates don't have
+        # access to open the tool"): it used to be cut with a note "open the RTA to see them"; now every line is posted, in
+        # messages titled "(1 of 4)" and so on (test_ay_group_parts has the rest)
         many = [item(f"Associate {i:03d}", "Break 1 moved 10:00 to 10:15 and a long reason " * 2) for i in range(120)]
-        text = body_for("slack", self.post(many), SLACK_FLOWS[0])["text"]
-        self.assertLessEqual(len(text), 3900)
-        lines = text.split("\n")
-        self.assertEqual(lines[0], "\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct")
-        shown = sum(1 for line in lines if line.startswith("\u2022 "))
-        self.assertGreater(shown, 10)
-        self.assertEqual(lines[-3:], [f"\u2026 and {120 - shown} more lines: open the RTA to see them.", DIVIDER,
-                                      "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."])
+        bodies = bodies_for("slack", self.post(many), SLACK_FLOWS[0])
+        texts = [b["text"] for b in bodies]
+        self.assertGreater(len(texts), 1)
+        for n, text in enumerate(texts, 1):
+            self.assertLessEqual(len(text), 3900)
+            self.assertEqual(text.split("\n")[0], f"\U0001f4cb SAKS, NMG Tier 2: changes for Sat 10 Oct ({n} of {len(texts)})")
+        self.assertEqual(sum(1 for t in texts for line in t.split("\n") if line.startswith("\u2022 ")), 120)
+        self.assertNotIn("more lines", "".join(texts))
+        self.assertEqual(texts[-1].split("\n")[-2:], [DIVIDER, "\u270f\ufe0f Changed on the RTA by Omar Mokhtar, 19:19."])
 
 
 if __name__ == "__main__":

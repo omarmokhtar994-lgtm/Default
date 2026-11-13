@@ -107,10 +107,18 @@ def _finding(item: dict, level: str) -> dict:
                              f"(allowed {issue.get('maximum', '')}).")
         return {"level": level, "text": " ".join(parts) or "Whole-week balance: see the technical details."}
     if kind == "NEXT_SUNDAY_BALANCE":
-        ex = examples[0] if examples else None
+        # The validator lists the cap examples first, then the steps between neighbouring quarter hours, which have
+        # no "interval": a week with steps and no cap breaks starts with a step.
+        ex = next((e for e in examples if "interval" in e), None)
+        step = next((e for e in examples if "from" in e), None)
         text = (f"Next Sunday (the hours carried into the following week): "
                 f"{item.get('overage_cap_violations', 0)} half-hours over the cap")
         text += f", for example {ex['interval']} ({ex['actual']} on the floor, cap {ex['cap']})." if ex else "."
+        steps = int(item.get("imbalance_violations", 0) or 0)
+        if steps:
+            text += (f" {steps} step{'s' if steps != 1 else ''} between neighbouring quarter hours "
+                     f"{'are' if steps != 1 else 'is'} larger than allowed")
+            text += f", for example {step['from']} to {step['to']}." if step else "."
         return {"level": level, "text": text}
     count = item.get("count")
     return {"level": level, "text": f"{_humanize(kind) or 'Validator note'}"

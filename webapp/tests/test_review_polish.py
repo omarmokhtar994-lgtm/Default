@@ -43,16 +43,21 @@ class TheBrowserBar(unittest.TestCase):
     def test_theme_color_meta(self):
         # Re-pinned in Phase AG: the owner picked new page colours on 2026-10-15 (Graphite night #111418 and day
         # #F1F2F4 instead of #0E1A2B and #EAEFF5; evidence/phase_ag/colours), so the browser bar follows them.
+        # Re-pinned in Phase BA: the owner picked Night watch (#080F1E) and Tide (#E8EFF6) on 2026-10-25, and the Drafting table
+        # look has a dark field (#1B2321) around its light sheet.
         page = self.app.test_client().get("/login").get_data(as_text=True)  # no look picked: the device decides
-        self.assertIn('<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">', page)
-        self.assertIn('<meta name="theme-color" content="#F1F2F4" media="(prefers-color-scheme: light)">', page)
+        self.assertIn('<meta name="theme-color" content="#080F1E" media="(prefers-color-scheme: dark)">', page)
+        self.assertIn('<meta name="theme-color" content="#E8EFF6" media="(prefers-color-scheme: light)">', page)
         client = sign_in(self.app, "omar", "Owner-pass-123")
         client.set_cookie("theme", "light")  # the look the person picked
         page = client.get("/").get_data(as_text=True)
-        self.assertEqual(re.findall(r'<meta name="theme-color"[^>]*>', page), ['<meta name="theme-color" content="#F1F2F4">'])
+        self.assertEqual(re.findall(r'<meta name="theme-color"[^>]*>', page), ['<meta name="theme-color" content="#E8EFF6">'])
         client.set_cookie("theme", "dark")  # the look the person picked
         page = client.get("/").get_data(as_text=True)
-        self.assertEqual(re.findall(r'<meta name="theme-color"[^>]*>', page), ['<meta name="theme-color" content="#111418">'])
+        self.assertEqual(re.findall(r'<meta name="theme-color"[^>]*>', page), ['<meta name="theme-color" content="#080F1E">'])
+        client.set_cookie("theme", "draft")
+        page = client.get("/").get_data(as_text=True)
+        self.assertEqual(re.findall(r'<meta name="theme-color"[^>]*>', page), ['<meta name="theme-color" content="#1B2321">'])
 
 
 class TheNames(unittest.TestCase):

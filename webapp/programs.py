@@ -54,7 +54,8 @@ class ProgramBook:
             except ValueError:
                 options = {}
             out.append({"id": p["id"], "name": p["name"], "key": p["key"], "start_day": p["start_day"],
-                        "run_mode": p["run_mode"], "options": options, "saved": bool(p["options"]),
+                        "run_mode": p["run_mode"], "measure": p.get("measure", ""), "options": options,
+                        "saved": bool(p["options"]),
                         "lobs": mine, "units": units})
         return out
 
@@ -122,6 +123,76 @@ class ProgramBook:
             raise ValueError("Pick a run length.")
         self.store.update_program(program_id, start_day=start_day, run_mode=run_mode,
                                   options=json.dumps(options or {}, sort_keys=True))
+
+    MEASURES = {"interval": "Interval compliance", "sl": "Service level", "volume": "Volume weighted"}
+
+    def measure_setting(self, program_id: int) -> str:
+        """Phase AS: how the program counts billable time (interval, sl or volume); interval until it says otherwise."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        return (row or {}).get("measure") or "interval"
+
+    def set_measure(self, program_id: int, value: str) -> None:
+        self.program(program_id)
+        if value not in self.MEASURES:
+            raise ValueError("Pick interval compliance, service level or volume weighted.")
+        self.store.update_program(program_id, measure="" if value == "interval" else value)
+
+    RTA_EMPTY = {"target": None, "day_start": None, "shrinkage": None}
+
+    def rta_defaults(self, program_id: int) -> Dict[str, Any]:
+        """Phase AU: the program's defaults for its RTA pages, used wherever a LOB has none of its own: the interval
+        target (a whole percent), when the operating day starts (minutes of the schedule's time) and what counts as
+        shrinkage (a mapping). None for each one not set (the workbook's target, the calendar day, the standard)."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        try:
+            saved = json.loads((row or {}).get("rta") or "{}")
+        except ValueError:
+            saved = {}
+        return {**self.RTA_EMPTY, **{k: saved[k] for k in self.RTA_EMPTY if k in saved}}
+
+    def set_rta_defaults(self, program_id: int, target: Optional[int], day_start: Optional[int],
+                         shrinkage: Optional[Dict[str, List[str]]]) -> None:
+        self.program(program_id)
+        if target is not None and not 1 <= int(target) <= 100:
+            raise ValueError("The default target is 1 to 100 percent.")
+        if day_start is not None and (not 0 <= int(day_start) < 1440 or int(day_start) % 15):
+            raise ValueError("The operating day starts on a quarter hour, from 00:00 to 23:45.")
+        self.store.update_program(program_id, rta=json.dumps({
+            "target": None if target is None else int(target),
+            "day_start": None if day_start is None else int(day_start), "shrinkage": shrinkage}, sort_keys=True))
+
+    REQUEST_DEFAULTS = {"enabled": True, "lead": 0, "limit": 0}
+
+    def request_settings(self, program_id: int) -> Dict[str, Any]:
+        """Phase AU: a program's rules for associate break change requests: whether they are on, the minutes a new time
+        must be after now (the lead), and how many an associate may ask for one day (0 = no limit)."""
+        row = next((p for p in self.store.list_programs() if p["id"] == program_id), None)
+        try:
+            saved = json.loads((row or {}).get("requests") or "{}")
+        except ValueError:
+            saved = {}
+        return {**self.REQUEST_DEFAULTS, **{k: saved[k] for k in self.REQUEST_DEFAULTS if k in saved}}
+
+    def request_settings_for_unit(self, key: str) -> Dict[str, Any]:
+        found = self.unit(key) if key else None
+        return self.request_settings(found["program"]["id"]) if found else dict(self.REQUEST_DEFAULTS)
+
+    def set_request_settings(self, program_id: int, enabled: bool, lead: int, limit: int) -> None:
+        self.program(program_id)
+        if not 0 <= int(lead) <= 240:
+            raise ValueError("The lead time is 0 to 240 minutes.")
+        if not 0 <= int(limit) <= 10:
+            raise ValueError("The daily limit is 0 to 10 (0 means no limit).")
+        self.store.update_program(program_id, requests=json.dumps({"enabled": bool(enabled), "lead": int(lead),
+                                                                   "limit": int(limit)}))
+
+    def day_measure(self, key: str) -> str:
+        """The RTA's measure for the unit ``key``: ``interval`` (billable aux stays on the floor) or ``sl`` (it does not:
+        service level and volume weighted). A key that is not a unit is interval compliance."""
+        found = self.unit(key) if key else None
+        if found is None:
+            return "interval"
+        return "interval" if self.measure_setting(found["program"]["id"]) == "interval" else "sl"
 
     def rename(self, program_id: Optional[int], lob_id: Optional[int], name: str) -> None:
         """New display names; keys stay as they are."""

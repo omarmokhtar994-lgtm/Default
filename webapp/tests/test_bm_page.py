@@ -28,7 +28,8 @@ class TheThreeSteps(_Volumes):
     def test_the_tabs_in_their_order(self):
         page = self.get(tab="forecast").get_data(as_text=True)
         nav = re.search(r'<nav class="bp-days" aria-label="Volumes">(.*?)</nav>', page, re.S).group(1)
-        self.assertEqual(re.findall(r">([^<]+)</a>", nav), ["1. Data", "2. Forecast", "3. Staffing", "Months ahead", "How we did", "Settings"])
+        # Phase BS (owner, 2026-11-18: "then add capacity plan"): Capacity follows Months ahead, which it is built from
+        self.assertEqual(re.findall(r">([^<]+)</a>", nav), ["1. Data", "2. Forecast", "3. Staffing", "Months ahead", "Capacity", "How we did", "Settings"])
 
     def test_every_tab_answers_with_the_copyright_and_no_inline_code(self):
         for tab in ("actuals", "forecast", "staffing", "outlook", "how", "settings"):

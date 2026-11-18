@@ -19,7 +19,9 @@ from openpyxl.styles import Font
 from .. import charts
 from ..app import clean_program
 from ..auth import login_required
+from ..channel_people import ChannelPeople
 from ..programs import ProgramBook
+from .. import capacity as capacity_mod
 from ..shrink_view import week_begin
 from .. import drivers as drivers_mod
 from .. import open_hours as open_hours_mod, sites as sites_mod
@@ -32,11 +34,13 @@ from ..volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes, parse_gr
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 # Phase BM (owner: "simple and easy to use"): three numbered steps, then the longer views and the settings; the old tab names in addresses still work
-TABS = (("actuals", "1. Data"), ("forecast", "2. Forecast"), ("staffing", "3. Staffing"), ("outlook", "Months ahead"), ("how", "How we did"),
+TABS = (("actuals", "1. Data"), ("forecast", "2. Forecast"), ("staffing", "3. Staffing"), ("outlook", "Months ahead"), ("capacity", "Capacity"), ("how", "How we did"),
         ("settings", "Settings"))
 HELD_MINUTES = 20
 BASIS_WORDS = {"learned": "learned from the history", "unseen": "no seasonal pattern yet", "typed": "your typed index", "trend": "trend only"}
 MAX_PASTE = 400_000
+CAPACITY_FIELDS = ("head_count", "hours_per_week", "attrition", "training_weeks", "nesting_weeks", "nesting_output")
+CAPACITY_CLASS_ROWS = 20
 
 
 def register(app, ctx) -> None:
@@ -340,6 +344,22 @@ def register(app, ctx) -> None:
                 picked = next((w for w in outlook["weeks"] if w["week"] == want), outlook["weeks"][0] if outlook["weeks"] else None)
             ctxt.update(o=outlook, o_error=o_error, level=level, months_text=months_text, site=site, site_names=names, owk=picked,
                         index=vb.outlook_index(key, channel), basis_words=BASIS_WORDS, month_names=[calendar.month_name[m] for m in range(1, 13)])
+        elif tab == "capacity":   # Phase BS
+            months_text = request.values.get("months", "6").strip() or "6"
+            cap = vb.capacity(key, channel, months_text) if months_text in ("3", "6", "12", "18", "24") else vb.capacity(key, channel, 6)
+            form = dict(cap["inputs"] or {})
+            if request.method == "POST":   # a refused entry is shown again as typed
+                form = {k: request.form.get(k, "") for k in CAPACITY_FIELDS}
+                form["classes"] = _capacity_classes()
+            roster = len(ChannelPeople(store).roster(ProgramBook(store).unit(key)["program"]["id"]))
+            chart = None
+            if cap["plan"] and cap["plan"]["weeks"]:
+                rows = cap["plan"]["weeks"]
+                chart = charts.lines([r["week"][5:] for r in rows], [("Needed", charts.ORANGE, [r["needed"] for r in rows]),
+                                                                    ("Available", charts.BLUE, [r["available"] for r in rows])],
+                                     y_max=charts.nice(max(max(r["needed_high"], r["available"]) for r in rows) * 1.05), unit="", y_min=0,
+                                     label="People needed and available by week")
+            ctxt.update(cap=cap, cap_form=form, roster_count=roster, months_text=months_text, cap_chart=chart, cap_defaults=capacity_mod.DEFAULTS)
         elif tab == "settings":
             ctxt.update(settings=vb.settings(key), labels=LABELS, defaults=DEFAULTS, hours_view=_hours_view(vb.open_hours(key)), sites_doc=vb.sites(key), site_gaps=_site_gaps(vb.sites(key)))
         return render_template("volumes.html", **ctxt)
@@ -620,6 +640,60 @@ def register(app, ctx) -> None:
         ctx._record("volumes_outlook_saved", program=key, subject=channel, detail="seasonal index for the months ahead")
         flash("Saved the seasonal index.")
         return redirect(url_for("volumes_page", tab="outlook", program=key, channel=channel), code=303)
+
+    def _capacity_classes() -> List[Dict[str, str]]:
+        """The class rows typed on the Capacity tab; a row with both boxes empty is not a class."""
+        rows = [{"week": request.form.get(f"class.{n}.week", "").strip(), "people": request.form.get(f"class.{n}.people", "").strip()}
+                for n in range(1, CAPACITY_CLASS_ROWS + 2)]
+        return [r for r in rows if r["week"] or r["people"]]
+
+    @app.route("/volumes/capacity", methods=["POST"])
+    @login_required
+    def volumes_capacity():  # type: ignore[no-untyped-def]
+        """Phase BS: the figures behind a channel's capacity plan; all checked before any is kept."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.form.get("channel", ""))
+        try:
+            vb.set_capacity_inputs(key, channel, {**{k: request.form.get(k, "") for k in CAPACITY_FIELDS}, "classes": _capacity_classes()}, g.user["id"])
+        except ValueError as exc:
+            flash(str(exc))
+            return _render("capacity")
+        ctx._record("volumes_capacity_saved", program=key, subject=channel, detail="capacity plan figures")
+        flash("Saved the capacity figures.")
+        return redirect(url_for("volumes_page", tab="capacity", program=key, channel=channel, months=request.form.get("months", "6")), code=303)
+
+    @app.route("/volumes/capacity.xlsx")
+    @login_required
+    def volumes_capacity_xlsx():  # type: ignore[no-untyped-def]
+        """Phase BS: the capacity plan of a channel, week by week, as the page shows it."""
+        vb, key = _book(), _unit()
+        channel = _channel(request.args.get("channel", ""))
+        months = request.args.get("months", "6")
+        cap = vb.capacity(key, channel, months if months in ("3", "6", "12", "18", "24") else 6)
+        if not cap["plan"]:
+            flash(cap["error"] or "Save the capacity figures first.")
+            return redirect(url_for("volumes_page", tab="capacity", program=key, channel=channel), code=303)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = f"{channel} capacity"
+        ws.append(["Week starting", "Needed", "Needed, low", "Needed, high", "Available", "Gap", "From classes", "Contacts expected"])
+        for w in cap["plan"]["weeks"]:
+            ws.append([w["week"], w["needed"], w["needed_low"], w["needed_high"], w["available"], w["gap"], w["classes_live"], w["contacts"]])
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        i = cap["inputs"]
+        ws.append([])
+        ws.append([f"Head count {i['head_count']:g}; {i['hours_per_week']:g} hours a week; shrinkage {cap['shrinkage']:g}%; attrition {i['attrition']:g}% a month; "
+                   f"training {i['training_weeks']} weeks, nesting {i['nesting_weeks']} weeks at {i['nesting_output']:g}%; handle time {cap['aht']:g} s."])
+        sug = cap["plan"]["suggestion"]
+        if sug:
+            ws.append([f"First week short: {cap['plan']['first_short']}. Start a class of {sug['people']} on {sug['start']}; ready {sug['ready']}"
+                       + (" (later than the short week)." if sug["late"] else ".")])
+        out = io.BytesIO()
+        wb.save(out)
+        out.seek(0)
+        ctx._record("downloaded", program=key, subject="Volumes capacity", detail=channel)
+        return send_file(out, as_attachment=True, download_name=f"Capacity_{channel}_{cap['start']}.xlsx", mimetype=XLSX)
 
     @app.route("/volumes/outlook.xlsx")
     @login_required

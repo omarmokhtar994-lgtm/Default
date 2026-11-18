@@ -28,7 +28,7 @@ from . import drivers as D, erlang, forecast as F, forecast_methods as M, volume
 import calendar
 from collections import Counter
 
-from . import open_hours as H, outlook as O, sites as SITES
+from . import capacity as CAP, open_hours as H, outlook as O, sites as SITES
 from .channel_template import _head, _title
 from .volumes_io import CHANNELS, DAY_NAMES, FIRST_DAY, ParsedVolumes
 
@@ -237,6 +237,63 @@ class VolumeBook:
             merged[str(month)] = number
         saved = self.store.volume_settings(key) or {}
         self.store.set_volume_settings(key, {**saved, "outlook": {**(saved.get("outlook") or {}), channel: merged}}, user_id)
+
+    # ---------------------------------------------------------------- Phase BS: the capacity plan
+    def capacity_inputs(self, key: str, channel: str) -> Optional[Dict[str, Any]]:
+        """The figures the planner saved for a channel's capacity plan (checked when saved), or None."""
+        saved = (((self.store.volume_settings(key) or {}).get("capacity") or {}).get(channel))
+        return dict(saved) if saved else None
+
+    def set_capacity_inputs(self, key: str, channel: str, raw: Dict[str, Any], user_id: Optional[int]) -> Dict[str, Any]:
+        """Check the figures and keep them; nothing is kept when any is wrong."""
+        if channel not in CHANNELS:
+            raise ValueError("The channel is Phone, Chat or Email.")
+        checked = CAP.check_inputs(raw, self._next_week())
+        saved = self.store.volume_settings(key) or {}
+        self.store.set_volume_settings(key, {**saved, "capacity": {**(saved.get("capacity") or {}), channel: checked}}, user_id)
+        return checked
+
+    @staticmethod
+    def _next_week() -> date:
+        today = _today()
+        return today + timedelta(days=7 - (today.weekday() + 1) % 7)
+
+    def capacity(self, key: str, channel: str, months: Any = 6) -> Dict[str, Any]:
+        """The months ahead (``outlook``) turned into agent hours on the floor week by week, through this channel's latest interval shape and the
+        Staffing tab's own rule (Erlang for phone and chat, work for email), then into people needed against people held (``capacity.plan``).
+        ``plan`` is None until the planner has saved the figures, or when the history cannot carry a plan (``error`` says why)."""
+        start = self._next_week()
+        out: Dict[str, Any] = {"channel": channel, "start": start.isoformat(), "inputs": self.capacity_inputs(key, channel), "plan": None, "error": "",
+                               "shrinkage": None, "aht": None}
+        s = self.settings(key)[channel]
+        out["shrinkage"] = float(s["shrinkage"])
+        try:
+            o = self.outlook(key, channel, start=start, months=months)
+            doc = self.drivers(key)
+            skip = sorted(set(doc["skip_weeks"]) | set(D.holiday_weeks(doc["events"], channel, start)))
+            _, choice, profile, _ = self._read(key, channel, start, self._weeks_wanted(s, None), skip)
+        except ValueError as exc:
+            out["error"] = str(exc)
+            return out
+        aht = float(s["aht"]) if s["aht"] else self._aht(key, channel, choice.used)
+        out["aht"] = aht
+        hours_per_interval = self.step(key) / 60.0
+        weeks: List[Dict[str, Any]] = []
+        for w in o["weeks"]:
+            week_start = date.fromisoformat(w["week"])
+            calls = [F.distribute(day["expected"], profile.shares[py_day(d)]) if sum(profile.shares[py_day(d)]) > 0 else [0] * self._slots(key)
+                     for d, day in enumerate(w["days"])]
+            needs, _ = self._needs(key, channel, calls, aht, s, self._dates(week_start), doc["events"])
+            hours = sum(sum(day) for day in needs) * hours_per_interval
+            ratio_low = w["low"] / w["expected"] if w["expected"] else 1.0
+            ratio_high = w["high"] / w["expected"] if w["expected"] else 1.0
+            weeks.append({"week": w["week"], "hours": hours, "low": hours * ratio_low, "high": hours * ratio_high, "contacts": w["expected"]})
+        out["weeks_hours"] = weeks
+        if out["inputs"]:
+            out["plan"] = CAP.plan(weeks, out["inputs"], out["shrinkage"] / 100.0)
+            for row, w in zip(out["plan"]["weeks"], weeks):
+                row["contacts"] = w["contacts"]
+        return out
 
     def outlook(self, key: str, channel: str, start: Optional[date] = None, months: Any = 6, site: Optional[str] = None) -> Dict[str, Any]:
         """The weeks and months ahead from the history: months (the last may be partial at the front), weeks and their days, each with a range

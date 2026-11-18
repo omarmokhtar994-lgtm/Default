@@ -16,7 +16,7 @@
 {% endmacro %}
 {% block content %}
 <div class="phead"><div>
-  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'staffing': 'people needed', 'outlook': 'the months ahead', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
+  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'staffing': 'people needed', 'outlook': 'the months ahead', 'capacity': 'capacity plan', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
   <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
 </div></div>
 <p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.{% if show_zone is defined and show_zone != zone %} You are reading this page in {{ show_name }} time; nothing that is kept changes.{% elif tab in ('forecast', 'staffing', 'how') %} Pick another zone under "Show times in" to read this page in it; nothing that is kept changes.{% endif %}</p>
@@ -381,6 +381,48 @@
   <form method="post" action="{{ url_for('volumes_outlook_index') }}" class="ins-filter" aria-label="Seasonal index"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}">
     <div class="exp-row">{% for m in range(1, 13) %}<label>{{ month_names[m - 1] }} <input type="text" inputmode="decimal" name="idx.{{ m }}" value="{{ '%g' % index[m] if m in index else '' }}" placeholder="100" autocomplete="off"></label>{% endfor %}</div>
     <p><button class="primary" type="submit">Save the index</button></p></form></section>{% endif %}
+{% endif %}
+
+{# ------------------------------------------------------------------ capacity (Phase BS) #}
+{% if tab == 'capacity' %}
+{% set f = cap_form %}{% set ro = '' if can('volumes_edit') else ' readonly' %}
+<section class="panel" aria-labelledby="cap-h"><h2 id="cap-h">{{ channel }}: people needed against people you will have</h2>
+  <p class="dim">Each week ahead takes the expected contacts from Months ahead, spreads them over the intervals the way the last weeks did, and counts the people needed on the floor as the Staffing tab does{% if channel == 'Email' %} (email is counted as work, not with Erlang){% endif %}. That is turned into people on the payroll with the hours a week below and the channel's shrinkage ({{ '%g' % cap.shrinkage }}%, from Settings). People available start from your head count, fall each week by the attrition you type, and grow with each class once it has finished training.</p>
+  <p class="chan" role="group" aria-label="Months ahead"><span class="dim">Months ahead</span> {% for n in (3, 6, 12, 18, 24) %}<a class="button{% if months_text == n|string %} primary{% endif %}" href="{{ url_for('volumes_page', tab='capacity', program=key, channel=channel, months=n) }}">{{ n }}</a> {% endfor %}</p>
+  <form method="post" action="{{ url_for('volumes_capacity') }}" class="ins-filter" aria-label="Capacity figures"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="channel" value="{{ channel }}"><input type="hidden" name="months" value="{{ months_text }}">
+    <div class="exp-row">
+      <label>Head count today <input type="text" inputmode="decimal" name="head_count" value="{{ '%g' % f.head_count if f.head_count is number else (f.head_count or '') }}" autocomplete="off" aria-describedby="cap-hc"{{ ro }}></label>
+      <label>Hours a week per person <input type="text" inputmode="decimal" name="hours_per_week" value="{{ '%g' % f.hours_per_week if f.hours_per_week is number else (f.hours_per_week or '') }}" placeholder="{{ '%g' % cap_defaults.hours_per_week }}" autocomplete="off"{{ ro }}></label>
+      <label>Attrition, % a month <input type="text" inputmode="decimal" name="attrition" value="{{ '%g' % f.attrition if f.attrition is number else (f.attrition or '') }}" placeholder="{{ '%g' % cap_defaults.attrition }}" autocomplete="off"{{ ro }}></label>
+      <label>Training, weeks <input type="text" inputmode="numeric" name="training_weeks" value="{{ f.training_weeks if f.training_weeks is not none else '' }}" placeholder="{{ cap_defaults.training_weeks }}" autocomplete="off"{{ ro }}></label>
+      <label>Nesting, weeks <input type="text" inputmode="numeric" name="nesting_weeks" value="{{ f.nesting_weeks if f.nesting_weeks is not none else '' }}" placeholder="{{ cap_defaults.nesting_weeks }}" autocomplete="off"{{ ro }}></label>
+      <label>Output while nesting, % <input type="text" inputmode="decimal" name="nesting_output" value="{{ '%g' % f.nesting_output if f.nesting_output is number else (f.nesting_output or '') }}" placeholder="{{ '%g' % cap_defaults.nesting_output }}" autocomplete="off"{{ ro }}></label>
+    </div>
+    <p class="dim" id="cap-hc">Type the people you have now on {{ channel|lower }}, as full-time equivalents. {{ roster_count }} {{ 'person is' if roster_count == 1 else 'people are' }} on the newest schedule of this program (all channels); that number is only a hint and is never used for you.</p>
+    <h3 class="sub">Classes</h3>
+    <p class="dim">A class starts on a Sunday. It counts for nothing while in training, for the output above while nesting, and in full after. A class started up to 26 weeks ago still counts.</p>
+    {% set classes = f.classes or [] %}
+    <div class="scroll" role="region" tabindex="0" aria-label="Classes (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Class</th><th scope="col">Starts (Sunday)</th><th scope="col">People</th></tr></thead><tbody>
+      {% for n in range(1, (classes|length) + (4 if can('volumes_edit') else 1)) %}{% set c = classes[n - 1] if n <= classes|length else {} %}{% if c or can('volumes_edit') %}<tr><th scope="row">{{ n }}</th>
+        <td><input type="date" name="class.{{ n }}.week" value="{{ c.week or '' }}" aria-label="Class {{ n }} starts"{{ ro }}></td>
+        <td><input type="text" inputmode="numeric" name="class.{{ n }}.people" value="{{ c.people or '' }}" aria-label="Class {{ n }} people" autocomplete="off"{{ ro }}></td></tr>{% endif %}{% endfor %}
+    </tbody></table></div>
+    {% if can('volumes_edit') %}<p><button class="primary" type="submit">Save and work it out</button></p>{% endif %}
+  </form>
+</section>
+{% if cap.error %}<p class="notice" role="alert">{{ cap.error }}</p>
+{% elif not cap.plan %}<p class="notice calm">Type the people you have now (head count) and save, and the plan for the {{ months_text }} months ahead shows here.</p>
+{% else %}{% set p = cap.plan %}
+<section class="panel" aria-labelledby="cap-r"><h2 id="cap-r">The plan, week by week</h2>
+  {% if p.suggestion %}{% set sg = p.suggestion %}<p class="notice" role="status">Short from the week of {{ p.first_short }}. Start a class of {{ sg.people }} on {{ sg.start }} to have them ready by {{ sg.ready }}{% if sg.late %}, which is after the short week: until then the gap stays{% endif %}. This is a suggestion; add it under Classes to plan it.</p>
+  {% else %}<p class="notice calm" role="status">No week is short in the {{ months_text }} months ahead with these figures.</p>{% endif %}
+  {% if cap_chart %}{{ cap_chart }}{% endif %}
+  <div class="scroll" role="region" tabindex="0" aria-label="Capacity by week (scrolls sideways)"><table class="edgrid"><thead><tr><th scope="col">Week starting</th><th scope="col">Contacts expected</th><th scope="col">Needed</th><th scope="col">Range</th><th scope="col">Available</th><th scope="col">From classes</th><th scope="col">Gap</th></tr></thead><tbody>
+    {% for w in p.weeks %}<tr><th scope="row">{{ w.week }}</th><td>{{ '{:,}'.format(w.contacts) }}</td><td>{{ '%.1f' % w.needed }}</td><td>{{ '%.1f' % w.needed_low }} to {{ '%.1f' % w.needed_high }}</td><td>{{ '%.1f' % w.available }}</td><td>{{ '%.1f' % w.classes_live }}</td>
+      <td>{% if w.gap < 0 %}<b>short {{ '%.1f' % (0 - w.gap) }}</b>{% else %}{{ '%.1f' % w.gap }} spare{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  <p class="dim">Needed is people on the payroll: the floor hours over {{ '%g' % cap.inputs.hours_per_week }} hours a week less {{ '%g' % cap.shrinkage }}% shrinkage, with handle time {{ '%g' % cap.aht }} s. The range follows the months-ahead range of the contacts.</p>
+  <p><a class="button" href="{{ url_for('volumes_capacity_xlsx', program=key, channel=channel, months=months_text) }}">Download the plan (Excel)</a></p>
+</section>{% endif %}
 {% endif %}
 
 {# ------------------------------------------------------------------ settings #}

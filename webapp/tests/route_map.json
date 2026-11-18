@@ -1099,6 +1099,22 @@
    []
   ],
   [
+   "/volumes/capacity",
+   "volumes_capacity",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/volumes/capacity.xlsx",
+   "volumes_capacity_xlsx",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
    "/volumes/draft.xlsx",
    "volumes_draft",
    [

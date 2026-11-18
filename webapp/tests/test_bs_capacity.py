@@ -6,6 +6,9 @@ import unittest
 from datetime import date, timedelta
 
 from webapp import capacity as C
+from webapp.programs import ProgramBook
+from webapp.tests.test_bi_volumes_routes import PASSWORD, _Volumes
+from webapp.tests.test_runs import sign_in, token
 
 FIRST = date(2026, 11, 22)    # a Sunday
 
@@ -93,6 +96,106 @@ class ThePlan(unittest.TestCase):
     def test_shrinkage_of_100_percent_is_refused(self):
         with self.assertRaisesRegex(ValueError, "hrinkage"):
             C.plan(weeks([10.0]), inputs(), shrinkage=1.0)
+
+
+FORM = {"channel": "Phone", "head_count": "12", "hours_per_week": "40", "attrition": "3", "training_weeks": "4", "nesting_weeks": "2",
+        "nesting_output": "50", "class.1.week": "", "class.1.people": ""}
+
+
+class TheTab(_Volumes):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        ProgramBook(cls.store).set_measure(cls.alpha_id, "sl")
+
+    def setUp(self):
+        self.history(self.alpha, weeks=10)
+        self.addCleanup(lambda: self.store.set_volume_settings(self.alpha, {**(self.store.volume_settings(self.alpha) or {}), "capacity": {}}, None))
+
+    def post(self, who="plan_a", **form):
+        client = sign_in(self.app, who, PASSWORD)
+        return client.post("/volumes/capacity", data={"program": self.alpha, "csrf_token": token(client), **FORM, **form})
+
+    def test_before_any_figures_the_tab_asks_for_the_head_count(self):
+        page = self.page("plan_a", tab="capacity").get_data(as_text=True)
+        self.assertIn("<h1>Volumes: capacity plan</h1>", page)
+        self.assertIn('name="head_count"', page)
+        self.assertIn("Type the people you have now", page)
+        self.assertIn("on the newest schedule", page)            # the roster count is a hint beside the box, never taken
+
+    def test_saved_figures_give_a_week_by_week_plan(self):
+        self.assertEqual(self.post().status_code, 303)
+        got = self.vb.capacity(self.alpha, "Phone", 3)
+        self.assertEqual(got["inputs"]["head_count"], 12.0)
+        # one row for each week the months ahead reach (10 weeks of history: the trend alone, up to 8 weeks ahead)
+        self.assertEqual([w["week"] for w in got["plan"]["weeks"]], [w["week"] for w in self.vb.outlook(self.alpha, "Phone", months=3)["weeks"]])
+        self.assertGreater(len(got["plan"]["weeks"]), 4)
+        first = got["plan"]["weeks"][0]
+        self.assertGreater(first["needed"], 0)
+        self.assertEqual(first["available"], 12.0)
+        page = self.page("plan_a", tab="capacity", months="3").get_data(as_text=True)
+        self.assertIn(first["week"], page)
+        self.assertIn("{:.1f}".format(first["needed"]), page)
+
+    def test_needed_hours_are_the_staffing_tabs_people_for_the_same_week(self):
+        self.post()
+        got = self.vb.capacity(self.alpha, "Phone", 3)
+        row = got["plan"]["weeks"][0]
+        week = date.fromisoformat(row["week"])
+        expected = self.vb.outlook(self.alpha, "Phone", months=3)["weeks"][0]["expected"]
+        f = self.vb.forecast(self.alpha, "Phone", week, total=expected)
+        hours = sum(sum(day) for day in f["needs"]) * self.step / 60
+        shrink = self.vb.settings(self.alpha)["Phone"]["shrinkage"] / 100
+        self.assertAlmostEqual(row["needed"], round(hours / (40 * (1 - shrink)), 1), delta=0.15)
+
+    def test_a_bad_figure_is_refused_and_nothing_is_kept(self):
+        reply = self.post(attrition="120")
+        self.assertEqual(reply.status_code, 200)
+        self.assertIn("Attrition is a percent a month from 0 to 30.", reply.get_data(as_text=True))
+        self.assertIsNone(self.vb.capacity_inputs(self.alpha, "Phone"))
+
+    def test_a_team_manager_looks_but_cannot_change(self):
+        self.assertEqual(self.page("tm_a", tab="capacity").status_code, 200)
+        self.assertEqual(self.post(who="tm_a").status_code, 403)
+        self.assertIsNone(self.vb.capacity_inputs(self.alpha, "Phone"))
+
+    def test_another_programs_planner_cannot_read_or_write_it(self):
+        client = sign_in(self.app, "plan_b", PASSWORD)
+        self.assertEqual(client.get("/volumes", query_string={"program": self.alpha, "tab": "capacity"}).status_code, 403)
+        self.assertEqual(client.get("/volumes/capacity.xlsx", query_string={"program": self.alpha, "channel": "Phone"}).status_code, 403)
+
+    def test_a_class_is_kept_and_counted(self):
+        first = self.vb.capacity(self.alpha, "Phone", 3)["start"]
+        self.post(**{"class.1.week": first, "class.1.people": "6", "training_weeks": "0", "nesting_weeks": "0"})
+        got = self.vb.capacity(self.alpha, "Phone", 3)
+        self.assertEqual(got["inputs"]["classes"], [{"week": first, "people": 6}])
+        self.assertEqual(got["plan"]["weeks"][0]["available"], 18.0)
+
+    def test_the_download_holds_the_pages_numbers(self):
+        import io
+        from openpyxl import load_workbook
+        self.post()
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        reply = client.get("/volumes/capacity.xlsx", query_string={"program": self.alpha, "channel": "Phone", "months": "3"})
+        self.assertEqual(reply.status_code, 200)
+        ws = load_workbook(io.BytesIO(reply.data)).active
+        rows = list(ws.iter_rows(values_only=True))
+        self.assertEqual(rows[0][:6], ("Week starting", "Needed", "Needed, low", "Needed, high", "Available", "Gap"))
+        plan = self.vb.capacity(self.alpha, "Phone", 3)["plan"]["weeks"]
+        self.assertEqual([r[:6] for r in rows[1:1 + len(plan)]],
+                         [(w["week"], w["needed"], w["needed_low"], w["needed_high"], w["available"], w["gap"]) for w in plan])
+
+    def test_email_is_counted_as_work_not_erlang(self):
+        self.history(self.alpha, weeks=10, per_week=700, channel="Email")
+        self.post(channel="Email")
+        got = self.vb.capacity(self.alpha, "Email", 3)
+        self.assertGreater(got["plan"]["weeks"][0]["needed"], 0)
+
+    def test_without_history_the_tab_says_what_is_missing(self):
+        self.post(channel="Chat")
+        got = self.vb.capacity(self.alpha, "Chat", 3)
+        self.assertIn("There is no Chat history", got["error"])
+        self.assertIsNone(got["plan"])
 
 
 if __name__ == "__main__":

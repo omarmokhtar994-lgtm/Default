@@ -4495,3 +4495,42 @@ class TheBmScreensInTheBrowser(unittest.TestCase):
             page.goto(self.url("forecast"))
             page.get_by_role("button", name="Remove the saved one").click()
             page.close()
+
+
+BS_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_bs" / "screens"
+
+
+class TheBsCapacityInTheBrowser(unittest.TestCase):
+    """Phase BS (owner, 2026-11-18: "then add capacity plan"): the Capacity tab in a real browser on a desktop and on a phone: the figures typed and
+    saved, the week-by-week table and the suggested class, a short week named in words, nothing scrolling the page sideways."""
+
+    setUpClass = classmethod(ThePhaseVInTheBrowser.setUpClass.__func__)
+    tearDownClass = classmethod(ThePhaseVInTheBrowser.tearDownClass.__func__)
+    page = InTheBrowser.page
+    sign_in = InTheBrowser.sign_in
+    seed = TheVolumesInTheBrowser.seed
+    url = TheVolumesInTheBrowser.url
+    sideways = TheBlScreensInTheBrowser.sideways
+    small_targets = TheBlScreensInTheBrowser.small_targets
+
+    def test_the_capacity_tab(self):
+        self.seed()
+        self.addCleanup(lambda: self.store.set_volume_settings(self.key, {}, 1))
+        BS_SCREENS.mkdir(parents=True, exist_ok=True)
+        for width, name in ((1280, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            self.sign_in(page)
+            page.goto(self.url("capacity"))
+            expect(page.get_by_role("heading", name="Volumes: capacity plan")).to_be_visible()
+            page.get_by_label("Head count today").fill("2")
+            page.get_by_label("Attrition, % a month").fill("3")
+            page.get_by_role("button", name="Save and work it out").click()
+            expect(page.get_by_role("heading", name="The plan, week by week")).to_be_visible()
+            expect(page.get_by_role("status").filter(has_text="Short from the week of")).to_contain_text("Start a class of")
+            expect(page.get_by_text(re.compile(r"^short \d")).first).to_be_visible()
+            expect(page.get_by_role("link", name="Download the plan (Excel)")).to_be_visible()
+            self.assertLessEqual(self.sideways(page), 1, name)
+            self.assertEqual(self.small_targets(page, "button, a.button"), 0, name)
+            page.wait_for_timeout(600)   # let the page change finish, so the picture is of this page only
+            page.screenshot(path=str(BS_SCREENS / f"capacity_{name}.png"), full_page=True)
+            page.close()

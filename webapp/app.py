@@ -34,6 +34,7 @@ from .attendance import DayBook, operating_span, with_text  # noqa: F401  operat
 from .channel_page import NAMES as CHANNEL_NAMES
 from .channel_plan import plan_day  # noqa: F401  read by webapp/routes through this module (tests replace it)
 from .clock import EGYPT, HOME, SHOWN, ZONES, moved_text
+from . import flood
 from .permissions import ENDPOINTS as PERMISSION_ENDPOINTS, allowed, matrix
 from .day import channel_letters
 from .leave import LeaveBook
@@ -359,6 +360,9 @@ def create_app(config: Dict[str, Any]) -> Flask:
             queue.start()
         if config.get("NOTIFY_THREAD", config.get("START_WORKER", True)):
             notifier.start()
+
+    if config.get("LIMITS"):  # Phase BQ: requests per minute and a thread reserve for staff, checked before anything else
+        flood.install(app, config["LIMITS"])
 
     OPEN_TO_ALL = {"static", "login", "logout", "set_theme", "change_password", "home", "submit_run", "run_tag",
                    "program_rename", "program_setup", "workbook"}

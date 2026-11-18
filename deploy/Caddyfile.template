@@ -1,4 +1,17 @@
 # © 2026 Omar Mokhtar. All rights reserved.
+# Phase BQ: a connection that sends its headers slowly, or sits idle, is dropped, so a few slow bots cannot hold
+# every connection open. The body may take longer (a hard cap on the whole upload, per Caddy's docs): 10 minutes is
+# enough for a 25 MB workbook at about 45 KB/s.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10m
+			idle 2m
+		}
+	}
+}
+
 # Caddy gets and renews the HTTPS certificate for this name by itself.
 {{DOMAIN}} {
 	encode gzip

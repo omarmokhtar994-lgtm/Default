@@ -26,6 +26,7 @@ def config_from_env(env: Mapping[str, str]) -> Dict[str, Any]:
     if not days.isdigit() or not 30 <= int(days) <= 60:
         sys.exit(f"SCHEDULER_RUN_FILES_DAYS is {days!r}: run files are kept 30 to 60 days; give a number in that range.")
     return {
+        "LIMITS": _limits(env),
         "DATA_DIR": data_dir,
         "RUN_FILES_DAYS": int(days),
         "PACKAGE_ROOT": env.get("SCHEDULER_PACKAGE_ROOT", "").strip() or None,
@@ -37,6 +38,24 @@ def config_from_env(env: Mapping[str, str]) -> Dict[str, Any]:
 
 
 CONNECTION_LIMIT = 1000
+THREADS = 8
+# Phase BQ: waitress drops X-Forwarded-For unless told who may send it, and then every visitor looked like 127.0.0.1
+# (one bot's wrong passwords held sign-in for everyone). Only Caddy, on this machine, is believed, and only for the
+# visitor's address (the scheme and host stay as before).
+PROXY = {"trusted_proxy": HOST, "trusted_proxy_count": 1, "trusted_proxy_headers": {"x-forwarded-for"}}
+
+
+def _limits(env: Mapping[str, str]) -> Dict[str, int]:
+    """Phase BQ: requests per minute for each signed-in person and for each address not signed in, and how many of
+    the worker threads people not signed in may hold at once (the rest stay free for staff)."""
+    out = {}
+    for key, default, top in (("PER_USER", 600, None), ("PER_ADDRESS", 1200, None), ("ANON_BUSY", 4, THREADS - 1)):
+        name = f"SCHEDULER_LIMIT_{key}"
+        text = env.get(name, str(default)).strip()
+        if not text.isdigit() or int(text) < 1 or (top and int(text) > top):
+            sys.exit(f"{name} is {text!r}: give a whole number from 1" + (f" to {top}." if top else " up."))
+        out[key] = int(text)
+    return out
 
 
 def main() -> None:
@@ -55,8 +74,8 @@ def main() -> None:
     print(f"Team Scheduler on http://{HOST}:{config['PORT']} (data {config['DATA_DIR']}, "
           f"package {config['PACKAGE_ROOT']})", flush=True)
     # Phase AV: waitress refuses new connections past 100 open ones, and people waiting on a busy page each hold one
-    serve(app, host=HOST, port=config["PORT"], threads=8, max_request_body_size=26 * 1024 * 1024,
-          connection_limit=CONNECTION_LIMIT, ident="TeamScheduler")
+    serve(app, host=HOST, port=config["PORT"], threads=THREADS, max_request_body_size=26 * 1024 * 1024,
+          connection_limit=CONNECTION_LIMIT, ident="TeamScheduler", **PROXY)
 
 
 if __name__ == "__main__":

@@ -531,6 +531,20 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Phase BQ (owner, 2026-11-18): the site keeps working under a flood of requests
+
+- **Guard (`webapp/flood.py`, installed first among the request checks):** 600 requests a minute per signed-in person, 1200 per address not signed in
+  (the site's own files not counted: an office shares one address), past that 429 with Retry-After; people not signed in hold at most 4 of the 8
+  threads at once, past that 503 at once, so staff always get a thread. Settings `SCHEDULER_LIMIT_PER_USER`, `SCHEDULER_LIMIT_PER_ADDRESS`,
+  `SCHEDULER_LIMIT_ANON_BUSY` (1 to 7) in the service's own-settings lines; a bad value stops the start with a message. On by default from `serve.py`;
+  apps built in tests have no `LIMITS` and no guard. One refusal log line per key per minute.
+- **Visitor's address (a production defect found while measuring):** waitress dropped `X-Forwarded-For`, so every visitor was 127.0.0.1 and 40 wrong
+  passwords from anyone held sign-in for everyone for 15 minutes. `serve.PROXY` now believes that one header from Caddy on 127.0.0.1 only.
+- **Caddy:** global timeouts in `deploy/Caddyfile.template` (headers 10 s, body 10 min, idle 2 min). `update.sh` does not rewrite the Caddyfile: on the
+  existing server the block is added by hand, then `caddy validate` and a reload.
+- **Measured:** `evidence/phase_bq/FLOOD_AB.md` (rule written first). 200 bots from 200 addresses: staff p95 8.3 s without the guard, 0.44 s with it.
+  Limit: a person signing in during such a flood can wait about 16 s for a free thread.
+
 ## Phase BP (owner, 2026-11-12): shift Preferences with a coverage allowance; three navigation items
 
 - **Engine:** `preference_swap_polish` also moves one person to the asked shift: free moves first, then moves inside `PREFERENCE_COVERAGE_ALLOWANCE` (0.02, the

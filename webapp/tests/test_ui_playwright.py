@@ -77,6 +77,22 @@ class InTheBrowser(unittest.TestCase):
         page.wait_for_url(self.base + "/")
         page.wait_for_timeout(600)  # let the page-to-page crossfade finish before any screenshot
 
+    def test_a_page_to_page_crossfade_never_leaves_an_error(self):
+        """Phase BQ: Chromium 157 skips some page-to-page crossfades and rejects the transition's promises
+        (InvalidStateError, "Transition was aborted because of invalid state"); about 1 in 6 clicks left an uncaught
+        error on the page. The site handles that one error: the page is fine, only the fade was skipped."""
+        page = self.page(scheme="light")
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        for _ in range(20):
+            for href in ("/account/password", "/"):
+                page.evaluate("h => { const a = document.createElement('a'); a.href = h; a.textContent = 'go';"
+                              " document.body.appendChild(a); a.click(); }", href)
+                page.wait_for_load_state("load")
+                page.wait_for_timeout(400)
+        self.assertEqual(errors, [])
+
     def test_login_page_renders_with_copyright(self):
         page = self.page()
         page.goto(self.base + "/login")
@@ -1278,7 +1294,7 @@ class ThePhaseSInTheBrowser(unittest.TestCase):
     scroll on a phone."""
 
     setUpClass_base = classmethod(TheSchedulesInTheBrowser.setUpClass.__func__)
-    tearDownClass = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
+    tearDownClass_base = classmethod(TheSchedulesInTheBrowser.tearDownClass.__func__)
     page = InTheBrowser.page
     sign_in = InTheBrowser.sign_in
     go = ThePhaseRInTheBrowser.go
@@ -1286,9 +1302,16 @@ class ThePhaseSInTheBrowser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import io
+        from unittest import mock
         from webapp.programs import ProgramBook
+        from webapp.tests.test_as_pages import _Noon
         from webapp.tests.test_ready import make_ready
         from webapp.tests.test_runs import client_for, run_id_of, token
+        # The clock stops at noon on 14 October 2026, the week these screens are set in (2026-11-18): the start
+        # dates offered run from 4 weeks before today, so on the real clock 18 October left the list after 15
+        # November and filing the unfiled upload could not pick it. What is checked is unchanged.
+        cls.clock = mock.patch("webapp.app.datetime", _Noon)
+        cls.clock.start()
         cls.setUpClass_base()
         S_SCREENS.mkdir(parents=True, exist_ok=True)
         book = ProgramBook(cls.store)
@@ -1305,6 +1328,11 @@ class ThePhaseSInTheBrowser(unittest.TestCase):
                 "workbook": (io.BytesIO(ready), name)}, content_type="multipart/form-data"))
         cls.ready_run = upload(cls.tier2, "2026-10-11", "SAKS_week_ready.xlsx")
         cls.unfiled = upload("", "", "Uploaded_without_a_program.xlsx")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.clock.stop()
+        cls.tearDownClass_base()
 
     def test_a_phone_has_no_sideways_scroll(self):
         phone = self.page(width=390, height=844)

@@ -16,7 +16,7 @@
 {% endmacro %}
 {% block content %}
 <div class="phead"><div>
-  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'outlook': 'the months ahead', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
+  <h1>Volumes: {{ {'actuals': 'actuals', 'forecast': 'forecast and people needed', 'staffing': 'people needed', 'outlook': 'the months ahead', 'how': 'how did we do', 'settings': 'settings'}[tab] }}</h1>
   <p class="byline">{{ label }}. Actual contacts per interval, a forecast of next week from a number you type, the people needed with Erlang for programs counted by service level, and how each week went.</p>
 </div></div>
 <p class="dim" id="zone-note">Volumes are kept in {{ zone_name }} time{% if tab != 'settings' and can('volumes_edit') %}; change the zone on the Settings tab{% endif %}.{% if show_zone is defined and show_zone != zone %} You are reading this page in {{ show_name }} time; nothing that is kept changes.{% elif tab in ('forecast', 'staffing', 'how') %} Pick another zone under "Show times in" to read this page in it; nothing that is kept changes.{% endif %}</p>

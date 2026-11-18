@@ -1,10 +1,13 @@
 # © 2026 Omar Mokhtar. All rights reserved.
 """Phase BR (owner, 2026-11-18: "develop current forecast first to be perfect"): each weekday's interval shape is pooled over the chosen weeks
 (its contacts summed, over the weekday's total), the candidate that met its pre-registered rule (evidence/phase_br/RULES.md, R1). Made-up volumes."""
+import re
 import unittest
 from datetime import date, timedelta
 
 from webapp import forecast as F
+from webapp.tests.test_bi_volumes_routes import PASSWORD, _Volumes
+from webapp.tests.test_runs import sign_in
 
 STEP = 360                      # four intervals a day keeps the hand-worked numbers small
 TARGET = date(2026, 6, 7)       # a Sunday
@@ -39,6 +42,19 @@ class ThePooledShape(unittest.TestCase):
         others = sorted(20 / t for t in (140, 160, 150))[1]
         expected = sorted(mix)[1] / (sorted(mix)[1] + 6 * others)
         self.assertAlmostEqual(self.profile.day_shares[0], expected, places=12)
+
+
+class TheHeadings(_Volumes):
+    """Found in the Phase BR screen review: the Staffing tab's heading read "Volumes:" and stopped (the tab had no title in the template)."""
+
+    def test_every_tab_has_a_heading_that_says_what_it_shows(self):
+        client = sign_in(self.app, "plan_a", PASSWORD)
+        for tab in ("actuals", "forecast", "staffing", "outlook", "how", "settings"):
+            page = client.get("/volumes", query_string={"program": self.alpha, "tab": tab}).get_data(as_text=True)
+            heading = re.search(r"<h1>(.*?)</h1>", page, re.S).group(1)
+            self.assertRegex(heading, r"^Volumes: \S", tab)
+        page = client.get("/volumes", query_string={"program": self.alpha, "tab": "staffing"}).get_data(as_text=True)
+        self.assertIn("<h1>Volumes: people needed</h1>", page)
 
 
 if __name__ == "__main__":

@@ -34,3 +34,12 @@ The Volumes page reads as three steps: **1. Data** (what really came in), **2. F
 - The suggestion itself stays the trend. Two rules for taking the best method automatically were written down first and tested on made-up
   histories; both failed (`evidence/phase_bm/methods.md`), so the site shows the evidence and leaves the choice to you.
 - Unusual weeks (far from the line through the others) are left out of the test and named under the table.
+
+## The shape of each day (Phase BR, 2026-11-18)
+- Each weekday's spread over the intervals is now its contacts added up over the weeks behind the pattern, over that weekday's total. Before, it was
+  the middle (median) of each interval's share of the day, which runs low where an interval has few contacts.
+- Measured on made-up histories with a known truth before the change (`evidence/phase_br/RULES.md`, R1): the error per interval fell from 14.7 to
+  12.6 % at 1,500 contacts a week and from 6.4 to 5.6 % at 7,000, and was lower on every history tried.
+- A handle time per interval was tested too (R2) and did not meet its rule: one handle time for the week stays. Where handle time really changes
+  over the day it would help; that needs its own rule first.
+- The share of the week each day gets is unchanged.

@@ -531,6 +531,25 @@ Plan: `docs/superpowers/plans/2026-11-07-phase-bl-shifts-parttime-sites-forecast
 - *Gate.* `tests_staged/test_rc9_2_71_schedule_columns.py` is in the release gate: the columns, the refusals by name, the shift-length rule, the part-time reservation, off days, break counts, and a check that the engine and the clean-room check (`tools/clean_room_check.py`, no shared code) agree on random columns. `webapp/tests/test_bl_fuzz.py` fuzzes the new web modules against brute-force models with fixed seeds; `test_bl_gaps.py` covers a clock-change week, Chat and Email, interval-compliance programs, settings saved before the phase and the largest inputs; `test_bl_website_readers.py` the ready-schedule upload and the break rules the website reads.
 - *Channel planner.* `test_channel_plan` failed intermittently before Phase BL too: the planner stops FEASIBLE at its wall-clock limit and the objective it reached swung from 54 to 300 between identical runs. `PLACING` (`webapp/channel_plan.py`) uses large-neighbourhood search only, and only for a solve that has breaks to place (typed breaks keep `KEPT` exactly: `test_bc_channel_rotation` and `test_bc_two_ticks` compare them). Measured in `evidence/phase_bl/channel_solver_ab.md`; if it finds no plan the old settings get their try.
 
+## Phases BR and BS (owner, 2026-11-18: "Develop current forecast first to be perfect then add capacity plan")
+Plan: `docs/superpowers/plans/2026-11-18-phase-br-forecast-accuracy-capacity.md`. How-tos: `docs/howto/CAPACITY_PLAN.md`, the BR section of
+`docs/howto/FORECAST_INTERVAL_ZONES_METHODS.md`.
+- **BR, measured first** (`evidence/phase_br/RULES.md`, written before the runs; `accuracy.py` on made-up histories with a known truth, two seed sets):
+  R1, the interval shape: pooled counts beat the median of day shares on every history (14.7 to 12.6 % interval error at 1,500 contacts a week);
+  shipped in `forecast.build_profile` (`test_br_forecast_accuracy.py`). R2, handle time per interval: not met (worse on flat handle times, no gain at
+  1,500 a week); not shipped. The day mix is unchanged.
+- **BR, screens reviewed** (`evidence/phase_br/REVIEW.md`, `screens.py`): one defect, the Staffing tab's heading was empty; fixed.
+- **BS, capacity**: `webapp/capacity.py` (pure: checked figures, people needed against available, the suggested class), `VolumeBook.capacity`
+  (Months ahead -> interval shape -> the Staffing tab's own people-needed rule -> floor hours), tab `capacity`, `POST /volumes/capacity`
+  (volumes_edit), `GET /volumes/capacity.xlsx` (volumes_view); figures kept in the volume settings under `capacity` per channel.
+  Tests: `test_bs_capacity.py`, `TheBsCapacityInTheBrowser`; screens `evidence/phase_bs/screens/`. `route_map.json` regenerated (two routes added);
+  `test_bm_page`'s tab order re-pinned with the reason (Capacity added).
+- **Rulings the owner can overturn**: head count is required (the roster count is a hint only); attrition has no default from history (the site
+  holds no leaver records); shrinkage is added once, from the channel's Settings; the needed range follows the Months-ahead range of contacts;
+  one interval shape for every week ahead; intraday reforecast is not in these phases.
+- Not touched: the engine, the protected workbooks, `engine/regression_assets`. Pre-existing and left: `webapp/routes/volumes.py` imports
+  `datetime.datetime` without using it.
+
 ## Phase BQ (owner, 2026-11-18): the site keeps working under a flood of requests
 
 - **Guard (`webapp/flood.py`, installed first among the request checks):** 600 requests a minute per signed-in person, 1200 per address not signed in

@@ -6,8 +6,8 @@ What it does, in the order a planner thinks:
   1. ``choose_weeks``: the last N whole weeks (six unless asked otherwise) that are clean. Every weekday is read from the same weeks, so six Sundays means
      six Saturdays: a week with a holiday, an outage, a missing or part day, an odd total, or one the planner leaves out is dropped as a whole and an older
      clean week steps in. What was dropped, and why, is kept for the page.
-  2. ``build_profile``: from those weeks, each weekday's interval shape and the week's day mix. Days and weeks are first turned into shares of their own
-     totals (the normalising), so busier weeks do not outweigh quieter ones.
+  2. ``build_profile``: from those weeks, each weekday's interval shape (its contacts pooled over the weeks, Phase BR) and the week's day mix (each
+     week first turned into shares of its own total, so busier weeks do not outweigh quieter ones).
   3. ``suggest_total``: from the chosen weeks' totals, a suggested total with a range (a robust trend line that respects gaps, damped, and the spread
      around it). A suggestion only: the planner's own number always wins.
   4. ``forecast_week``: the planner's week total (or day totals) spread over days and intervals as whole numbers that add up exactly.
@@ -140,26 +140,27 @@ def choose_weeks(days: Dict[date, List[float]], step: int, week_start: date, wee
 
 
 def build_profile(days: Dict[date, List[float]], step: int, choice: WeekChoice) -> Profile:
-    """The shape of each open weekday and of the week from the chosen weeks. Each day is turned into shares of its own total and each week into
-    shares of its own total, so a busier week counts the same as a quieter one (no level bias); the median of those shares over the same weeks gives
-    each weekday's interval shape and the week's day mix."""
+    """The shape of each open weekday and of the week from the chosen weeks. A weekday's interval shape is its contacts summed over the weeks, over
+    its total over the same weeks (Phase BR: pooled met its pre-registered rule against the median of day shares, which is biased low where counts
+    are small; evidence/phase_br/RULES.md, R1). The week's day mix turns each week into shares of its own total, so a busier week counts the same as
+    a quieter one, and takes the median of those shares."""
     if len(choice.used) < MIN_WEEKS:
         why = "; ".join(f"{w}: {r}" for w, r in choice.skipped[:4])
         raise ValueError(f"Only {len(choice.used)} clean week{'s' if len(choice.used) != 1 else ''} of history; the shape needs at least {MIN_WEEKS}."
                          + (f" Left out: {why}." if why else ""))
     slots = 1440 // step
-    per_day: Dict[int, List[List[float]]] = {w: [] for w in choice.open_days}
+    per_day: Dict[int, List[float]] = {w: [0.0] * slots for w in choice.open_days}
     day_mix: Dict[int, List[float]] = {w: [] for w in choice.open_days}
     for start in choice.used:
         totals = {}
         for w in choice.open_days:
             day = next(start + timedelta(days=o) for o in range(7) if (start + timedelta(days=o)).weekday() == w)
-            per_day[w].append(_normalise(days[day]))
+            per_day[w] = [a + b for a, b in zip(per_day[w], days[day])]
             totals[w] = sum(days[day])
         week = sum(totals.values())
         for w in choice.open_days:
             day_mix[w].append(totals[w] / week)
-    shares = {w: (_normalise([statistics.median(row[i] for row in per_day[w]) for i in range(slots)]) if w in per_day else [0.0] * slots) for w in range(7)}
+    shares = {w: (_normalise(per_day[w]) if w in per_day else [0.0] * slots) for w in range(7)}
     mix = _normalise([statistics.median(day_mix[w]) if w in day_mix else 0.0 for w in range(7)])
     return Profile(step=step, shares=shares, day_shares={w: mix[w] for w in range(7)},
                    weeks_used={w: (len(choice.used) if w in per_day else 0) for w in range(7)},

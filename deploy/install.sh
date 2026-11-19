@@ -142,6 +142,8 @@ run systemctl enable --now scheduler-web
 run systemctl restart scheduler-web
 run systemctl enable caddy
 run systemctl restart caddy
+# Nightly database copy (kept 14 nights in /var/backups/scheduler) and the 15-minute disk alert: deploy/disk_alert_setup.md
+run bash "$APP_DIR/package/deploy/setup_timers.sh"
 
 if [ "$DRY_RUN" != 1 ] && [ -t 0 ]; then
   read -rp "Run the safety gate now so the first run starts straight away? Takes 15-30 minutes. [Y/n] " WARM

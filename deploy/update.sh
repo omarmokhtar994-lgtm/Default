@@ -84,6 +84,8 @@ case " $WRITABLE " in
   *" $APP_DIR/package "*|*" $APP_DIR "*|*" $APP_DIR/venv "*) printf '\nWARNING: the service may still write its code (%s). Check /etc/systemd/system/scheduler-web.service and run: sudo systemctl daemon-reload && sudo systemctl restart scheduler-web\n' "$WRITABLE" >&2; exit 1;;
 esac
 echo "==> Hardening: the service writes only: ${WRITABLE:-nothing listed}; the code is read-only to it."
+# Nightly database copy and the 15-minute disk alert (deploy/disk_alert_setup.md); the website already runs the new package, so a failure here is said, not undone
+bash "$APP_DIR/package/deploy/setup_timers.sh" || printf '\nWARNING: the nightly copy or the disk alert could not be set up (see above). Run again: sudo bash %s/package/deploy/setup_timers.sh\n' "$APP_DIR" >&2
 
 if [ -t 0 ]; then
   read -rp "Run the new package's safety gate now (15-30 minutes)? [Y/n] " WARM

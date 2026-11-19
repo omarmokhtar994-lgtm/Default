@@ -163,6 +163,10 @@ says where each link comes from (about two minutes per group).
 **Backup**: users, run history and any Teams or Slack group links are in
 `/var/lib/scheduler/scheduler.db` (keep copies private); results are in
 `/var/lib/scheduler/runs/`.
+A copy of the database is made every night and the newest 14 are kept in
+`/var/backups/scheduler` (root only); a disk alert runs every 15 minutes. Both are
+set up by the installer: see `deploy/disk_alert_setup.md` (also how to put a copy back
+and how to name the group that gets the alerts).
 
 **Idle servers**: Oracle's Always Free terms allow it to reclaim compute
 instances that stay nearly idle for a week. Regular weekly runs normally keep

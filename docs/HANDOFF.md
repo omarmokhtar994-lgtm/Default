@@ -612,6 +612,15 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BT (owner, 2026-11-19): nightly database copy and the disk alert on timers
+- `deploy/db_backup.py` (SQLite backup API, `integrity_check`, gzip, 600 files in a 700 folder, newest `KEEP`=14 kept; fail-closed: missing or damaged
+  database or too little free space writes nothing and deletes no older copy) run by `scheduler-backup.timer` at 23:30 UTC as root, writing only
+  `/var/backups/scheduler`. Owner: "no off-server copy", so the copies are on the same disk.
+- `disk-alert.timer` every 15 minutes runs the existing `deploy/disk_alert.py` as `scheduler`; the group is `ALERT_UNIT` in `/etc/scheduler/disk-alert.env`
+  (made once, never overwritten, a LOB name never a link). The owner has not named a LOB yet, so it logs to the journal only until they do.
+- `deploy/setup_timers.sh` puts both in place; `install.sh` and `update.sh` call it. `deploy/disk_alert_setup.md` (the note `disk_alert.py` always
+  pointed to, which did not exist) says how to check, restore and name the group. Tests: `test_bt_backup_timers.py`.
+
 ## Installed (2026-11-19)
 The owner installed RC9.2.2 with phases BQ, BR and BS (sha256 `7f684958dbfd38bccd038f9868f03fa6076e2a87abfebfe5bc663c28a47b12df`, built from
 6ce2222) on the server (`84.13.140.126`, reached from Oracle Cloud Shell with the key file named in its history). Steps, all from Cloud Shell over ssh:

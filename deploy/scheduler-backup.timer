@@ -1,0 +1,11 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Every night at 23:30 UTC (01:30 Egypt time in winter, 02:30 in summer). Persistent: a night missed while the server was off runs at start.
+[Unit]
+Description=Team Scheduler nightly database copy
+
+[Timer]
+OnCalendar=*-*-* 23:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Team Scheduler: nightly copy of the website's database (deploy/db_backup.py). Started by scheduler-backup.timer;
+# installed by deploy/setup_timers.sh. Runs as root so the copies can be root-only (they hold the group links).
+[Unit]
+Description=Team Scheduler nightly database copy
+
+[Service]
+Type=oneshot
+Environment=SCHEDULER_DATA_DIR={{DATA_DIR}}
+Environment=BACKUP_DIR=/var/backups/scheduler
+Environment=KEEP=14
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart={{APP_DIR}}/venv/bin/python {{APP_DIR}}/package/deploy/db_backup.py
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/backups/scheduler
+ReadOnlyPaths={{DATA_DIR}}

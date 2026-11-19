@@ -9,6 +9,9 @@ Type=oneshot
 Environment=SCHEDULER_DATA_DIR={{DATA_DIR}}
 Environment=BACKUP_DIR=/var/backups/scheduler
 Environment=KEEP=14
+# A failed night is emailed when ALERT_EMAIL is set (Phase BU); the password comes from systemd, as for the disk alert
+EnvironmentFile=-/etc/scheduler/disk-alert.env
+LoadCredential=smtp-password:/etc/scheduler/smtp-password
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart={{APP_DIR}}/venv/bin/python {{APP_DIR}}/package/deploy/db_backup.py
 Nice=10

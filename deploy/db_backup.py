@@ -7,6 +7,7 @@ scheduler-YYYY-MM-DD-HHMMSS.db.gz (folder 700, file 600: the database holds the 
 copies and deletes older ones of that name only. Fail-closed: a missing or damaged database, or too little free space, stops it with a message
 and exit 1, and then no older copy is deleted. The copies stay on this server: they protect against a bad change or a damaged database, not
 against losing the server.
+A failed night is also emailed when email is set up (Phase BU, mail_alert.py).
 Settings (environment, all optional): SCHEDULER_DATA_DIR (/var/lib/scheduler), BACKUP_DIR (/var/backups/scheduler), KEEP (14)."""
 from __future__ import annotations
 
@@ -20,6 +21,12 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+import importlib.util
+
+_SPEC = importlib.util.spec_from_file_location("mail_alert", Path(__file__).resolve().parent / "mail_alert.py")
+MAIL = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(MAIL)       # the email sender beside this file (Phase BU)
 
 NAME = re.compile(r"^scheduler-\d{4}-\d{2}-\d{2}-\d{6}\.db\.gz$")
 
@@ -87,6 +94,9 @@ def main(argv: Optional[list] = None) -> int:
         made = backup(data_dir / "scheduler.db", dest, datetime.now())
     except (BackupError, OSError) as exc:
         print(f"BACKUP FAILED: {exc}. No older copy was deleted.", flush=True)
+        MAIL.send("Team Scheduler server: nightly backup failed",
+                  f"Tonight's copy of the database was not made: {exc}. No older copy was deleted. "
+                  "See: sudo journalctl -u scheduler-backup -n 20")
         return 1
     gone = prune(dest, keep)
     print(f"backup made: {made} ({made.stat().st_size / 2 ** 20:.1f} MB); {len(gone)} older copies deleted, newest {keep} kept", flush=True)

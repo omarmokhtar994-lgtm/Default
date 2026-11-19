@@ -53,19 +53,50 @@ sudo systemctl start scheduler-web
 ```
 sudo nano /etc/scheduler/disk-alert.env
 sudo systemd-run --wait --pipe -p User=scheduler -p EnvironmentFile=/etc/scheduler/disk-alert.env \
+  -p LoadCredential=smtp-password:/etc/scheduler/smtp-password \
   -E PYTHONPATH=/opt/scheduler/package -E SCHEDULER_DATA_DIR=/var/lib/scheduler -E PYTHONDONTWRITEBYTECODE=1 \
   /opt/scheduler/venv/bin/python /opt/scheduler/package/deploy/disk_alert.py --test
 sudo journalctl -u disk-alert -n 20 --no-pager
 ```
 
-The second command posts a test message to the named group whatever the level (it reads the settings file the same way the timer does,
+The second command posts a test message to the named group (and emails it, when email is set up) whatever the level (it reads the settings file the same way the timer does,
 so a LOB name with spaces needs no quotes). `WARN` and `CRIT` in the same file change the two levels.
+
+## Email (Phase BU)
+
+The same disk alerts, and a nightly copy that failed, can also come by email. The owner's choice (2026-11-19): a Gmail account sends to itself
+with a Google **App password** (a 16-letter password for this server only; it cannot be used to sign in to Google, and it can be revoked at any
+time from the Google account).
+
+1. In the Google account: turn on 2-Step Verification, then Security > App passwords > create one named "Team Scheduler server". Keep the page
+   open: Google shows it once.
+2. On the server, put the two addresses in the settings file (remove the `#` in front of these lines and fill them in):
+
+   ```
+   sudo nano /etc/scheduler/disk-alert.env
+   ```
+   ```
+   ALERT_EMAIL=you@gmail.com
+   SMTP_USER=you@gmail.com
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   ```
+3. Type the app password into the root-only file. It is not shown, not kept in the shell history and never on a command line:
+
+   ```
+   sudo bash -c 'umask 077; read -rs -p "App password: " P; echo; printf %s "$P" > /etc/scheduler/smtp-password'
+   ```
+4. Send a test with the `--test` command above: an email "Team Scheduler server: disk alert test" arrives.
+
+The password never appears in the journal; a refused sign-in shows only the mail server's code (535 means the app password is wrong or was
+revoked). To stop the emails, put the `#` back in front of `ALERT_EMAIL`. To change the password, run step 3 again.
 
 ## What it installs
 
 - `/etc/systemd/system/scheduler-backup.service` and `.timer` (as root; may write only `/var/backups/scheduler`).
 - `/etc/systemd/system/disk-alert.service` and `.timer` (as the `scheduler` account; may write only `/var/lib/scheduler`).
 - `/etc/scheduler/disk-alert.env`, made once and never overwritten.
+- `/etc/scheduler/smtp-password`, empty, root only (600), made once and never overwritten.
 - `/var/backups/scheduler`, root only (700).
 
 Both timers: `systemctl list-timers scheduler-backup.timer disk-alert.timer`.

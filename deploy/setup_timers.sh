@@ -42,8 +42,19 @@ if [ ! -f "$ENV_FILE" ]; then
 # ALERT_UNIT=
 # WARN=80
 # CRIT=90
+# Email (the same alerts, and a failed nightly copy): remove the # and type the addresses. The password goes in
+# /etc/scheduler/smtp-password, typed as disk_alert_setup.md says; never here.
+# ALERT_EMAIL=
+# SMTP_USER=
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
 TXT
   [ "$DRY_RUN" = 1 ] || chmod 644 "$ENV_FILE"
+fi
+# The email password (Phase BU): an empty root-only file the services read through systemd (LoadCredential needs it to exist); never overwritten
+PW_FILE="$PREFIX/etc/scheduler/smtp-password"
+if [ ! -f "$PW_FILE" ]; then
+  ( umask 077; : > "$PW_FILE" )
 fi
 run systemctl daemon-reload
 run systemctl enable --now scheduler-backup.timer disk-alert.timer

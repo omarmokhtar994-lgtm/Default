@@ -612,6 +612,14 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BU (owner, 2026-11-19): alerts by email ("1": the owner's Gmail sends to itself with an app password)
+- `deploy/mail_alert.py` (stdlib smtplib, STARTTLS on 587, `smtp.gmail.com` by default): `send()` returns None when `ALERT_EMAIL` is unset, False with
+  a reason (never the password; a refused sign-in shows only its code) when it cannot send. `disk_alert.py` emails the same words as the group post
+  (a failed email is not remembered, so it is tried again); `db_backup.py` emails a failed night.
+- The password is `/etc/scheduler/smtp-password` (root 600, made empty by `setup_timers.sh`, never overwritten), handed to both services by systemd
+  `LoadCredential`; the owner types it with `read -rs` (`deploy/disk_alert_setup.md`). Tests: `test_bu_email_alert.py`. The owner's address goes
+  only in the server's `/etc/scheduler/disk-alert.env`, never in the repository.
+
 ## Phase BT (owner, 2026-11-19): nightly database copy and the disk alert on timers
 - `deploy/db_backup.py` (SQLite backup API, `integrity_check`, gzip, 600 files in a 700 folder, newest `KEEP`=14 kept; fail-closed: missing or damaged
   database or too little free space writes nothing and deletes no older copy) run by `scheduler-backup.timer` at 23:30 UTC as root, writing only

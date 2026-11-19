@@ -6,7 +6,8 @@ Run every 15 minutes by a systemd timer (see disk_alert_setup.md). It reads how 
   * when a group is named (``ALERT_UNIT`` = a LOB's name as on the Notifications page), also posts a short message to that LOB's saved group with the website's own
     sender, so no link is ever typed, printed or logged here. It posts when the level rises (80 % warning, 90 % critical), again every 6 hours while critical and every
     24 hours while a warning, and once when the disk is back to normal. A failed post is tried again at the next run.
-Settings (environment, all optional): DISK_PATH, WARN (80), CRIT (90), ALERT_UNIT, SCHEDULER_DATA_DIR, ALERT_STATE.
+Settings (environment, all optional): DISK_PATH, WARN (80), CRIT (90), ALERT_UNIT, SCHEDULER_DATA_DIR, ALERT_STATE; and the email settings of mail_alert.py
+(Phase BU: the same message by email too, when ALERT_EMAIL is set).
 ``python disk_alert.py --test`` posts a test message to the named group whatever the level.
 """
 from __future__ import annotations
@@ -18,6 +19,12 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+
+import importlib.util
+
+_SPEC = importlib.util.spec_from_file_location("mail_alert", Path(__file__).resolve().parent / "mail_alert.py")
+MAIL = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(MAIL)       # the email sender beside this file (Phase BU)
 
 REPEAT = {"warn": 24 * 3600, "crit": 6 * 3600}
 CLEAR_MARGIN = 3          # the disk must be this many points under the warning level before it counts as normal again
@@ -78,11 +85,15 @@ def main(argv: Optional[list] = None) -> int:
     print(f"disk {pct:.0f}% used ({used_gb:.0f} of {total_gb:.0f} GB), level {level_of(pct, warn, crit)}, {'saying ' + what if what else 'nothing new to say'}", flush=True)
     if what is None:
         return 0
-    if not unit:
-        print("ALERT_UNIT is not set, so only this journal line is written.", flush=True)
-        new_ok = True
-    else:
-        new_ok = post(unit, data_dir, *words(what, pct, used_gb, total_gb))
+    said = words(what, pct, used_gb, total_gb)
+    new_ok = True
+    if unit:
+        new_ok = post(unit, data_dir, *said)
+    mailed = MAIL.send(*said)                  # None: email is not set up
+    if mailed is False:
+        new_ok = False
+    if not unit and mailed is None:
+        print("ALERT_UNIT and ALERT_EMAIL are not set, so only this journal line is written.", flush=True)
     if new_ok and "--test" not in argv:
         try:
             state_file.write_text(json.dumps(new))

@@ -629,6 +629,13 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - `deploy/setup_timers.sh` puts both in place; `install.sh` and `update.sh` call it. `deploy/disk_alert_setup.md` (the note `disk_alert.py` always
   pointed to, which did not exist) says how to check, restore and name the group. Tests: `test_bt_backup_timers.py`.
 
+## Installed (2026-11-19, evening): patch BU_EMAIL_ALERT (BT and BU together)
+Patch sha256 `bcf1af3ed3f5854a9a34bd49f7225430d926a465f80c0787d61cda5b64d2e75c` (from 56b61b7, made against the installed package with
+`--after BT_BACKUP_ALERT.zip`) applied with `apply_patch.sh`, then `setup_timers.sh`. The owner set `ALERT_EMAIL`/`SMTP_USER` in
+`/etc/scheduler/disk-alert.env` and wrote the Gmail app password into `/etc/scheduler/smtp-password` themselves (piped over ssh with history off;
+600 root, 19 bytes). The `disk_alert.py --test` run under systemd-run with `LoadCredential` reported "email sent" and the owner received it.
+No LOB is named in `ALERT_UNIT` (email only).
+
 ## Installed (2026-11-19)
 The owner installed RC9.2.2 with phases BQ, BR and BS (sha256 `7f684958dbfd38bccd038f9868f03fa6076e2a87abfebfe5bc663c28a47b12df`, built from
 6ce2222) on the server (`84.13.140.126`, reached from Oracle Cloud Shell with the key file named in its history). Steps, all from Cloud Shell over ssh:

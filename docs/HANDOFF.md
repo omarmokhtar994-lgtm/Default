@@ -612,6 +612,15 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Installed (2026-11-19)
+The owner installed RC9.2.2 with phases BQ, BR and BS (sha256 `7f684958dbfd38bccd038f9868f03fa6076e2a87abfebfe5bc663c28a47b12df`, built from
+6ce2222) on the server (`84.13.140.126`, reached from Oracle Cloud Shell with the key file named in its history). Steps, all from Cloud Shell over ssh:
+database copied to `/root/backups/scheduler-2026-11-19.db` (17:03 server clock, website running); the **new** `update.sh` run from the unzipped zip
+(the installed one predated sealing): SEALED, runtime check PASS (ortools 9.15.6755 exact, `cp_sat_smoke` OPTIMAL), service writes only
+`/var/lib/scheduler`; safety gate on the server: GATE PASS, 84 suites, 1642 tests (3 skipped there, 2 locally); Caddyfile re-rendered from the
+template (the diff added only the Phase BQ timeouts block), validated and reloaded at 19:26 Egypt time (`/etc/caddy/Caddyfile.before-bq` kept);
+then `seal_package.sh --check` SEALED, both services active, `/login` 200. Not checked: whether a `scheduler.db-wal` file existed at backup time.
+
 ## Installed (2026-11-09)
 The owner installed the audited package (sha256 `75e973f4b4f5d4a7dfb1564cedcd6223875514cd7014b28e49664410c044e8cf`, built from 5470611) with
 `deploy/update.sh`; the website reported `active`. The server's address comes from Cloud Shell's history (the address in

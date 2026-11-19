@@ -133,7 +133,9 @@ class Swaps(unittest.TestCase):
             self.book.answer(sid, self.users["a008"], accept=True)
         self.assertEqual(self.book.answer(sid, self.users["a014"], accept=True),
                          "Accepted. Your TM decides next.")
-        with self.assertRaisesRegex(ValueError, "A supervisor or an admin approves swaps."):
+        # re-pinned in Phase AK: the owner added team managers; a planner is still refused, told who decides. Both people
+        # have no team manager, so one team manager approves both sides and the wait names them together (AK review).
+        with self.assertRaisesRegex(ValueError, r"Waiting for a team manager \(Associate 007 and Associate 014\)\."):
             self.book.decide(sid, self.users["rta1"], approve=True)
         said = self.book.decide(sid, self.users["tm1"], approve=True)
         self.assertEqual(said, "Approved: Associate 007 works 21:00 - 06:00 and Associate 014 works 18:00 - 03:00 "
@@ -175,7 +177,9 @@ class Swaps(unittest.TestCase):
         me = sign_in(self.app, "a029", "Associate-pass-1")
         page = me.get("/me?swap=2026-10-15").get_data(as_text=True)
         self.assertIn('name="other" value="Associate 038"', page)
-        self.assertNotIn('name="other" value="Associate 033"', page)  # has an account, but the rest gap breaks
+        # re-pinned (Phase AO, owner: "it should show the option with warning"): a colleague whose swap breaks the
+        # rest gap is listed too, with the warning and an "Offer with the warning" button
+        self.assertIn("Warning: Associate 029 would rest 11 hours", page)
         tok = TOKEN.search(page).group(1)
         from unittest import mock
         from webapp.tests.test_ag_leave import _Clock

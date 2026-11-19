@@ -1,0 +1,93 @@
+botnet / A guard off: {"staff_requests": 6, "staff_codes": {"200": 6}, "staff_sign_in": [302], "staff_median_s": 5.806, "staff_p95_s": 8.325, "staff_max_s": 8.844, "bot_codes": {"200": 1159}}
+botnet / B defaults: {"staff_requests": 33, "staff_codes": {"200": 33}, "staff_sign_in": [503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 302], "staff_median_s": 0.315, "staff_p95_s": 0.436, "staff_max_s": 0.491, "bot_codes": {"503": 29216, "200": 527}}
+one address / A guard off: {"staff_requests": 42, "staff_codes": {"200": 42}, "staff_sign_in": [302], "staff_median_s": 0.907, "staff_p95_s": 1.138, "staff_max_s": 1.345, "bot_codes": {"200": 47, "429": 7972}}
+one address / B defaults: {"staff_requests": 80, "staff_codes": {"200": 80}, "staff_sign_in": [302], "staff_median_s": 0.264, "staff_p95_s": 0.326, "staff_max_s": 0.352, "bot_codes": {"503": 914, "200": 19, "429": 73863}}
+normal use, guard on: {"requests": 130, "codes": {"200": 130}}
+{
+ "botnet / A guard off": {
+  "staff_requests": 6,
+  "staff_codes": {
+   "200": 6
+  },
+  "staff_sign_in": [
+   302
+  ],
+  "staff_median_s": 5.806,
+  "staff_p95_s": 8.325,
+  "staff_max_s": 8.844,
+  "bot_codes": {
+   "200": 1159
+  }
+ },
+ "botnet / B defaults": {
+  "staff_requests": 33,
+  "staff_codes": {
+   "200": 33
+  },
+  "staff_sign_in": [
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   503,
+   302
+  ],
+  "staff_median_s": 0.315,
+  "staff_p95_s": 0.436,
+  "staff_max_s": 0.491,
+  "bot_codes": {
+   "503": 29216,
+   "200": 527
+  }
+ },
+ "one address / A guard off": {
+  "staff_requests": 42,
+  "staff_codes": {
+   "200": 42
+  },
+  "staff_sign_in": [
+   302
+  ],
+  "staff_median_s": 0.907,
+  "staff_p95_s": 1.138,
+  "staff_max_s": 1.345,
+  "bot_codes": {
+   "200": 47,
+   "429": 7972
+  }
+ },
+ "one address / B defaults": {
+  "staff_requests": 80,
+  "staff_codes": {
+   "200": 80
+  },
+  "staff_sign_in": [
+   302
+  ],
+  "staff_median_s": 0.264,
+  "staff_p95_s": 0.326,
+  "staff_max_s": 0.352,
+  "bot_codes": {
+   "503": 914,
+   "200": 19,
+   "429": 73863
+  }
+ },
+ "normal use, guard on": {
+  "requests": 130,
+  "codes": {
+   "200": 130
+  }
+ }
+}

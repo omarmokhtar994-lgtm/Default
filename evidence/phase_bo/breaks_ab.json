@@ -1,0 +1,590 @@
+[
+ {
+  "case": "n=20 need=0.95 seed=1",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.3,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.1,
+   "moves": 1,
+   "s": 0.0
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.1,
+   "moves": 1,
+   "s": 0.1
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.3,
+   "moves": 0,
+   "s": 0.4,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.3,
+   "moves": 0,
+   "s": 0.5,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=20 need=0.95 seed=2",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.6,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.2,
+   "moves": 2,
+   "s": 0.1
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.3,
+   "moves": 3,
+   "s": 0.2
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.6,
+   "moves": 0,
+   "s": 0.4,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.6,
+   "moves": 0,
+   "s": 0.3,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=20 need=1.05 seed=1",
+  "planned": {
+   "at": 24,
+   "of": 28,
+   "safe": 21,
+   "worst": 0.882,
+   "short_h": 4.2,
+   "moves": 0
+  },
+  "fix": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 2.8,
+   "moves": 8,
+   "s": 0.6
+  },
+  "fresh": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 2.8,
+   "moves": 11,
+   "s": 0.1
+  },
+  "exact": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 4.2,
+   "moves": 1,
+   "s": 0.4,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 4.2,
+   "moves": 1,
+   "s": 0.4,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=20 need=1.05 seed=2",
+  "planned": {
+   "at": 24,
+   "of": 28,
+   "safe": 17,
+   "worst": 0.882,
+   "short_h": 7.1,
+   "moves": 0
+  },
+  "fix": {
+   "at": 25,
+   "of": 28,
+   "safe": 21,
+   "worst": 0.877,
+   "short_h": 5.9,
+   "moves": 8,
+   "s": 0.7
+  },
+  "fresh": {
+   "at": 24,
+   "of": 28,
+   "safe": 21,
+   "worst": 0.855,
+   "short_h": 5.8,
+   "moves": 19,
+   "s": 0.1
+  },
+  "exact": {
+   "at": 26,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 6.9,
+   "moves": 7,
+   "s": 0.9,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 26,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.882,
+   "short_h": 6.9,
+   "moves": 7,
+   "s": 0.8,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=35 need=0.95 seed=1",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 1.8,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.3,
+   "moves": 8,
+   "s": 0.7
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 0.4,
+   "moves": 8,
+   "s": 0.2
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 1.8,
+   "moves": 0,
+   "s": 0.9,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 27,
+   "worst": 0.9,
+   "short_h": 1.8,
+   "moves": 0,
+   "s": 0.9,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=35 need=0.95 seed=2",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.4,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.0,
+   "moves": 7,
+   "s": 1.0
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.2,
+   "moves": 9,
+   "s": 0.3
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.4,
+   "moves": 0,
+   "s": 0.9,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.4,
+   "moves": 0,
+   "s": 0.9,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=35 need=1.05 seed=1",
+  "planned": {
+   "at": 19,
+   "of": 28,
+   "safe": 16,
+   "worst": 0.882,
+   "short_h": 19.3,
+   "moves": 0
+  },
+  "fix": {
+   "at": 24,
+   "of": 28,
+   "safe": 23,
+   "worst": 0.882,
+   "short_h": 18.0,
+   "moves": 13,
+   "s": 1.7
+  },
+  "fresh": {
+   "at": 19,
+   "of": 28,
+   "safe": 18,
+   "worst": 0.78,
+   "short_h": 18.8,
+   "moves": 59,
+   "s": 0.2
+  },
+  "exact": {
+   "at": 25,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.882,
+   "short_h": 19.1,
+   "moves": 10,
+   "s": 1.3,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 25,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.882,
+   "short_h": 19.1,
+   "moves": 10,
+   "s": 1.2,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=35 need=1.05 seed=2",
+  "planned": {
+   "at": 23,
+   "of": 28,
+   "safe": 20,
+   "worst": 0.885,
+   "short_h": 18.4,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 26,
+   "worst": 0.9,
+   "short_h": 17.0,
+   "moves": 15,
+   "s": 2.3
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 26,
+   "worst": 0.9,
+   "short_h": 17.0,
+   "moves": 12,
+   "s": 0.2
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 26,
+   "worst": 0.9,
+   "short_h": 17.8,
+   "moves": 7,
+   "s": 1.6,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 26,
+   "worst": 0.9,
+   "short_h": 17.8,
+   "moves": 7,
+   "s": 1.4,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=50 need=0.95 seed=1",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 2.3,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.2,
+   "moves": 9,
+   "s": 1.0
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.2,
+   "moves": 10,
+   "s": 0.3
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 2.3,
+   "moves": 0,
+   "s": 1.2,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 2.3,
+   "moves": 0,
+   "s": 1.3,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=50 need=0.95 seed=2",
+  "planned": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.6,
+   "moves": 0
+  },
+  "fix": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.1,
+   "moves": 8,
+   "s": 1.0
+  },
+  "fresh": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 0.1,
+   "moves": 9,
+   "s": 0.3
+  },
+  "exact": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.6,
+   "moves": 0,
+   "s": 1.2,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 28,
+   "of": 28,
+   "safe": 28,
+   "worst": 0.9,
+   "short_h": 1.6,
+   "moves": 0,
+   "s": 1.2,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=50 need=1.05 seed=1",
+  "planned": {
+   "at": 22,
+   "of": 28,
+   "safe": 18,
+   "worst": 0.889,
+   "short_h": 24.4,
+   "moves": 0
+  },
+  "fix": {
+   "at": 26,
+   "of": 28,
+   "safe": 23,
+   "worst": 0.893,
+   "short_h": 23.1,
+   "moves": 12,
+   "s": 2.7
+  },
+  "fresh": {
+   "at": 24,
+   "of": 28,
+   "safe": 23,
+   "worst": 0.881,
+   "short_h": 23.2,
+   "moves": 43,
+   "s": 0.3
+  },
+  "exact": {
+   "at": 27,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.899,
+   "short_h": 24.2,
+   "moves": 7,
+   "s": 2.3,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 27,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.899,
+   "short_h": 24.2,
+   "moves": 7,
+   "s": 1.7,
+   "solver": "OPTIMAL"
+  }
+ },
+ {
+  "case": "n=50 need=1.05 seed=2",
+  "planned": {
+   "at": 23,
+   "of": 28,
+   "safe": 18,
+   "worst": 0.888,
+   "short_h": 24.4,
+   "moves": 0
+  },
+  "fix": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.888,
+   "short_h": 23.5,
+   "moves": 10,
+   "s": 1.9
+  },
+  "fresh": {
+   "at": 25,
+   "of": 28,
+   "safe": 22,
+   "worst": 0.878,
+   "short_h": 23.5,
+   "moves": 38,
+   "s": 0.3
+  },
+  "exact": {
+   "at": 27,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.898,
+   "short_h": 24.0,
+   "moves": 8,
+   "s": 2.4,
+   "solver": "OPTIMAL"
+  },
+  "balanced": {
+   "at": 27,
+   "of": 28,
+   "safe": 24,
+   "worst": 0.898,
+   "short_h": 24.0,
+   "moves": 8,
+   "s": 3.1,
+   "solver": "OPTIMAL"
+  }
+ }
+]

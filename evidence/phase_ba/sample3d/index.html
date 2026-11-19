@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- © 2026 Omar Mokhtar. All rights reserved. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A little 3D, sample</title>
+<link rel="stylesheet" href="three_d.css">
+</head>
+<body>
+<header class="bar"><b>Sample: a little 3D with CSS only</b><span>No library, no WebGL, no image. Transform and opacity only.</span></header>
+<main>
+  <section class="hero">
+    <div class="copy">
+      <h1>Schedules, built and checked for your team</h1>
+      <p>The sign-in page: the week as a floating stack of shifts. It drifts slowly, and stops for reduced motion or when the tab is hidden.</p>
+      <p class="fine">Cost: about 1.6 KB of CSS, no JavaScript for the stack.</p>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="deck">
+        <div class="day d1"><i class="b b1"></i><i class="b b2"></i><i class="b b3"></i></div>
+        <div class="day d2"><i class="b b2"></i><i class="b b4"></i><i class="b b1"></i></div>
+        <div class="day d3"><i class="b b3"></i><i class="b b1"></i><i class="b b4"></i></div>
+        <div class="day d4"><i class="b b4"></i><i class="b b2"></i><i class="b b3"></i></div>
+      </div>
+    </div>
+  </section>
+  <section class="tiles">
+    <article class="tile"><h2>Right now</h2><p class="big">38 <small>on the floor</small></p><p>2 short on Phone until 16:00</p></article>
+    <article class="tile"><h2>Waiting for you</h2><p class="big">3 <small>requests</small></p><p>1 leave, 1 holiday, 1 swap</p></article>
+    <article class="tile"><h2>Latest schedule</h2><p class="big">100% <small>covered</small></p><p>0 below the floor</p></article>
+  </section>
+  <p class="fine wide">Home tiles lift a few degrees toward the pointer, on a mouse only (a touch screen and the RTA day page stay flat). About 0.5 KB of JavaScript.</p>
+</main>
+<script src="three_d.js"></script>
+</body>
+</html>

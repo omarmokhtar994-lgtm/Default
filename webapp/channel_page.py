@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .break_plan import hm, slots_for
 from .channel_people import can_work
-from .channel_plan import allowed, counts_for, need_at
+from .channel_plan import allowed, counts_for, coverage_slots, fixed_cover, need_at
 from .channels import CHANNELS, QUARTER, blended_at, inside
 from .day import planned
 from .versions import DAYS, channel_blocks, shift_span
@@ -69,18 +69,21 @@ def carry(week: Dict[str, Any], rules: Dict[str, Any], draft: Dict[str, Any], d:
 
 
 def before(week: Dict[str, Any], rules: Dict[str, Any], draft: Dict[str, Any], d: int,
-           skills: Dict[str, str]) -> Dict[str, Dict[int, int]]:
-    """People per channel and slot on day ``d`` from the day before's overnight blocks (none for Sunday: the week
-    before is another version)."""
-    out: Dict[str, Dict[int, int]] = {}
-    if d == 0:
-        return out
-    for name, blocks in current(week, d - 1, rules, draft)["blocks"].items():
-        for start, end, letter in blocks:
-            for t in range(max(start, 1440), end, QUARTER):
-                for c in (can_work(skills, name) if letter == "A" else letter):
-                    out.setdefault(c, {}).setdefault(t - 1440, 0)
-                    out[c][t - 1440] += 1
+           skills: Dict[str, str], language_rows=(), previous_week=None) -> Dict[str, Dict[int, int]]:
+    """Fixed overnight coverage, including skills, languages and breaks; Sunday can use the prior week."""
+    if d == 0 and previous_week is None:
+        return {}
+    source, previous_day = (previous_week, 6) if d == 0 else (week, d - 1)
+    plan = current(source, previous_day, rules, {} if d == 0 else draft)
+    people = people_for(source, previous_day, rules, plan, skills, language_rows)
+    at = _at(people, plan)
+    out = {}
+    for p in people:
+        for t in range(max(1440, p["start"]), p["end"], QUARTER):
+            letter = at.get((p["name"], t), "")
+            for c in (p["skills"] if letter == "A" else letter if letter in "PCE" else ""):
+                for key in [c] + [f"{c}:{lang}" for lang in p["counts_for"]]:
+                    out.setdefault(key, {})[t - 1440] = out.get(key, {}).get(t - 1440, 0) + 1
     return out
 
 
@@ -172,18 +175,15 @@ def grid(people: List[Dict[str, Any]], plan: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def coverage(people: List[Dict[str, Any]], plan: Dict[str, Any], setup: Dict[str, Any], d: int,
-             step: int) -> List[Dict[str, Any]]:
+             step: int, before=None, horizon=None) -> List[Dict[str, Any]]:
     """Per interval: people on each channel (the average of its 15-minute slots) against the need, and each language
     minimum (its lowest slot) against the minimum. Email Hours shows people on Email only."""
-    if not people:
-        return []
     at = _at(people, plan)
-    lo = min(p["start"] for p in people)
-    hi = max(p["end"] for p in people)
-    times = list(range(lo - lo % step, hi, step))
+    quarters = coverage_slots(people, before, horizon)
+    times = sorted({t - t % step for t in quarters})
 
     def count(t: int, letter: str, who: Optional[str] = None) -> int:
-        return sum(1 for p in people if (who is None or who in p["counts_for"])
+        return fixed_cover(before, letter, t, who) + sum(1 for p in people if (who is None or who in p["counts_for"])
                    and (at.get((p["name"], t)) == letter or (at.get((p["name"], t)) == "A" and letter in p["skills"])))
 
     rows = []

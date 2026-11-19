@@ -639,6 +639,11 @@ def _outcome_detail_text(outcome: dict, findings_label: "str | None" = None) -> 
                       f"{after.get('start_movement_hours')} h; distinct start times "
                       f"{before.get('distinct_start_times')} -> {after.get('distinct_start_times')}",
                       '- The schedule above is unchanged; use either.']
+    for alt in (outcome.get('independent_validation') or {}).get('alternative_exports') or []:
+        if alt.get('role') != 'PREFERENCE_CANDIDATE':
+            continue
+        if alt.get('status') == 'PASS' and alt.get('coverage_no_worse'):
+            lines += preference_candidate_lines(alt)
     actions = outcome.get('recommended_actions') or []
     if actions:
         lines += ['', 'Required action:'] + [f'- {a}' for a in actions]
@@ -1737,13 +1742,51 @@ def validate_shortfall_schedule(input_path: Path, workbook: Path, language_worki
 
 
 ALTERNATIVE_EXPORT_ROLES = ('MAX_TARGET_CANDIDATE', 'MAX_FLOOR_CANDIDATE', 'BALANCED_CANDIDATE',
-                            'SAFER_BALANCED_CANDIDATE', 'MORE_CONSISTENT_CANDIDATE')
+                            'SAFER_BALANCED_CANDIDATE', 'MORE_CONSISTENT_CANDIDATE', 'PREFERENCE_CANDIDATE')
 
 # What "no worse" means for MORE_CONSISTENT_CANDIDATE, on the validator's own
 # metrics: the first group may not fall, the second may not rise.
 MORE_CONSISTENT_HIGHER_IS_BETTER = ('after_target', 'after_floor', 'after100', 'after90', 'after80')
 MORE_CONSISTENT_LOWER_IS_BETTER = ('severe_floor_gaps', 'language_gap_count', 'zero_staffed_active_quarters',
                                    'coverage_split_gap_count', 'break_concurrency_violation_count')
+
+
+PREFERENCE_COVERAGE_ALLOWANCE_MAX = 0.02  # Phase BP (owner, 2026-11-12: "maybe 1-2% maximum"); the engine cannot claim more
+
+
+def preference_coverage_verdict(selected: dict, candidate: dict, allowance: float) -> tuple:
+    """(approved, losses, cost) for the PREFERENCE_CANDIDATE, on the independent validator's numbers for the two workbooks.
+
+    Each coverage count may be lower than the selected schedule's by at most floor(allowance x its value), with the allowance
+    never above PREFERENCE_COVERAGE_ALLOWANCE_MAX; no gap or violation count may be higher
+    (evidence/phase_bp/PREFERENCE_ALLOWANCE_RULE.txt).
+    """
+    allowance = max(0.0, min(float(allowance or 0), PREFERENCE_COVERAGE_ALLOWANCE_MAX))
+    losses, cost = [], {}
+    for key in MORE_CONSISTENT_HIGHER_IS_BETTER:
+        drop = float(selected.get(key) or 0) - float(candidate.get(key) or 0)
+        if drop > int(allowance * float(selected.get(key) or 0)):
+            losses.append(key)
+        elif drop > 0:
+            cost[key] = drop
+    losses += [k for k in MORE_CONSISTENT_LOWER_IS_BETTER
+               if float(candidate.get(k) or 0) > float(selected.get(k) or 0)]
+    return (not losses, losses, cost)
+
+
+def preference_candidate_lines(alt: dict) -> list:
+    """The outcome text for an offered PREFERENCE_CANDIDATE: what it gains and, when it costs coverage, what."""
+    pref = alt.get('preference') or {}
+    cost = alt.get('coverage_cost') or {}
+    made = f"{pref.get('swaps')} same-day swaps" + (f", {pref.get('moves')} moves to the asked shift" if pref.get('moves') else '')
+    lines = ['', 'A version of this schedule closer to the Preference shifts '
+                 + ('(same coverage, checked independently):' if not cost else '(checked independently):'),
+             f"- {Path(str(alt.get('workbook'))).name}",
+             f"- Preference shifts matched {pref.get('matched_before')} -> {pref.get('matched_after')} ({made})"]
+    if cost:
+        lines.append(f"- It costs coverage inside the {100 * float(alt.get('allowance') or 0):g}% allowance: "
+                     + ', '.join(f'{k} {v:g} lower' for k, v in sorted(cost.items())))
+    return lines + ['- The schedule above is unchanged; use either.']
 
 
 def more_consistent_coverage_verdict(selected: dict, candidate: dict) -> tuple:
@@ -1766,6 +1809,8 @@ ALTERNATIVE_USE = {
     'SAFER_BALANCED_CANDIDATE': 'ALTERNATIVE - safer balanced trade-off; validated on its own',
     'MORE_CONSISTENT_CANDIDATE': 'ALTERNATIVE - the same week with steadier start times; '
                                  'offered only if its coverage is no worse',
+    'PREFERENCE_CANDIDATE': 'ALTERNATIVE - shifts swapped or moved toward Preferences; offered only if its coverage '
+                            'is no worse or inside the preference allowance (2% at most)',
     'HARD_RULE_SHORTFALL_SCHEDULE': 'NOT RELEASABLE - meets every person rule; every missed coverage '
                                     'minimum is listed on its Shortfalls sheet',
 }
@@ -1818,16 +1863,23 @@ def validate_alternative_exports(case_root: Path, input_path: Path,
             row['status'] = 'PASS' if proc.returncode == 0 else str(report.get('status') or 'FAIL')
             row['hard_fail_count'] = report.get('hard_fail_count')
             row['failure_types'] = sorted({str(f.get('type')) for f in report.get('failures') or []})
-            if role == 'MORE_CONSISTENT_CANDIDATE':
-                _more_consistent_review(case_root, report, row)
+            if role in ('MORE_CONSISTENT_CANDIDATE', 'PREFERENCE_CANDIDATE'):
+                _more_consistent_review(case_root, report, row, role)
         except (OSError, json.JSONDecodeError):
             row['status'] = 'ERROR_VALIDATOR_DID_NOT_COMPLETE'
         results.append(row)
     return results
 
 
-def _more_consistent_review(case_root: Path, report: dict, row: dict) -> None:
-    """Approve the polished week only if its coverage is no worse than the selected schedule's."""
+def _more_consistent_review(case_root: Path, report: dict, row: dict, role: str = 'MORE_CONSISTENT_CANDIDATE') -> None:
+    """Approve the polished week only if its coverage is no worse than the selected schedule's (the preference week: inside its allowance)."""
+    audit = {}
+    for audit_path in sorted(case_root.glob('*solver_audit.json')):
+        try:
+            audit = json.loads(audit_path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            continue
+    swap = audit.get('preference_swap_polish') or {}
     selected_json = case_root / 'INDEPENDENT_VALIDATION.json'
     try:
         selected = json.loads(selected_json.read_text(encoding='utf-8')).get('metrics') or {}
@@ -1835,15 +1887,19 @@ def _more_consistent_review(case_root: Path, report: dict, row: dict) -> None:
         row['coverage_no_worse'] = False
         row['coverage_losses'] = ['selected schedule not validated']
     else:
-        ok, losses = more_consistent_coverage_verdict(selected, report.get('metrics') or {})
-        row['coverage_no_worse'] = ok
+        if role == 'PREFERENCE_CANDIDATE':
+            row['allowance'] = max(0.0, min(float(swap.get('allowance') or 0), PREFERENCE_COVERAGE_ALLOWANCE_MAX))
+            ok, losses, row['coverage_cost'] = preference_coverage_verdict(selected, report.get('metrics') or {}, row['allowance'])
+        else:
+            ok, losses = more_consistent_coverage_verdict(selected, report.get('metrics') or {})
+        row['coverage_no_worse'] = ok  # for the preference week: no worse, or inside the allowance (coverage_cost says which)
         row['coverage_losses'] = losses
-    for audit_path in sorted(case_root.glob('*solver_audit.json')):
-        try:
-            polish = json.loads(audit_path.read_text(encoding='utf-8')).get('shift_consistency_polish') or {}
-        except (OSError, json.JSONDecodeError):
-            continue
-        row['consistency'] = {'before': polish.get('before'), 'after': polish.get('after')}
+    if audit:
+        if role == 'PREFERENCE_CANDIDATE':
+            row['preference'] = {k: swap.get(k) for k in ('swaps', 'moves', 'matched_before', 'matched_after')}
+        else:
+            polish = audit.get('shift_consistency_polish') or {}
+            row['consistency'] = {'before': polish.get('before'), 'after': polish.get('after')}
     if row.get('status') == 'PASS' and not row.get('coverage_no_worse'):
         row['status'] = 'NOT_APPROVED_COVERAGE_WORSE'
 

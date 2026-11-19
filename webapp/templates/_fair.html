@@ -1,0 +1,13 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AL: the Fairness tables of Plan channels (one per group of people with the same channels and language). #}
+{% macro hm_of(m) %}{{ m // 60 }} h {{ '%02d'|format(m % 60) }}{% endmacro %}
+{% macro fair_tables(groups, when) %}
+  {% for g in groups %}<div class="scroll" role="region" tabindex="0" aria-label="{{ when }}: {{ g.label }} (scrolls sideways)"><table class="actable fair">
+    <caption>{{ when }}: {{ g.label }}</caption>
+    <thead><tr><th scope="col">Person</th>{% for c in 'PCEA' %}<th scope="col">{{ names[c] }}</th>{% endfor %}<th scope="col">From even</th><th scope="col">Longest on one channel</th></tr></thead>
+    <tbody>{% for p in g.people %}<tr><th scope="row">{{ p.name }}</th>{% for c in 'PCEA' %}<td>{% if p.minutes[c] %}{{ hm_of(p.minutes[c]) }} ({{ (p.share[c] * 100)|round|int }}%){% else %}–{% endif %}</td>{% endfor %}
+      <td>{% if p.gap is none %}only one in this group{% else %}{% set pts = p.gap|round|int %}{{ pts }} point{{ 's' if pts != 1 }}{% if p.furthest %}, <b>furthest from even</b>{% endif %}{% endif %}</td>
+      <td>{{ hm_of(p.longest) }}{% if when == 'This week' and p.longest_day %} ({{ full[p.longest_day] }}){% endif %}</td></tr>{% endfor %}
+    <tr class="even"><th scope="row">Even share</th>{% for c in 'PCEA' %}<td>{{ (g.even[c] * 100)|round|int }}%</td>{% endfor %}<td></td><td></td></tr></tbody>
+  </table></div>{% else %}<p class="note">No channels planned yet.</p>{% endfor %}
+{% endmacro %}

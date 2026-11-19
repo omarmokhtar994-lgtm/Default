@@ -114,9 +114,11 @@ class TheKinds(_Tagged):
         both = [i for i in self.store.notify_items(unit=self.key) if i["ref"] == made["ref"]]
         self.assertEqual({(i["status"], i["reason"]) for i in both}, {("skipped", "undone before it was posted")})
 
-    def test_vto_and_a_break_added_on_the_day(self):
-        self.days.add_item(self.key, WED, "Associate 037", "VTO", "10:00", 60, self.omar)
-        self.assertEqual((self.items()[0]["kind"], self.items()[0]["text"]), ("overtime", "VTO 10:00 to 11:00"))
+    def test_overtime_and_a_break_added_on_the_day(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): the "overtime" kind of post is shown by overtime after the shift now
+        self.days.add_item(self.key, WED, "Associate 006", "Overtime", "", 60, self.omar, side="after")
+        self.assertEqual(self.items()[0]["kind"], "overtime")
+        self.assertRegex(self.items()[0]["text"], r"^Overtime \d\d:\d\d to \d\d:\d\d$")
         for at in ("16:00", "15:30", "11:30", "09:30"):
             try:
                 self.days.add_item(self.key, WED, "Associate 012", "Break", at, 15, self.omar)
@@ -172,7 +174,7 @@ class TheKinds(_Tagged):
         item = self.items()[0]
         self.assertEqual((item["status"], item["reason"]), ("skipped", "left out on the RTA"))
         with leave_out(False):
-            self.days.add_item(self.key, WED, "Associate 028", "VTO", "16:00", 60, self.omar)
+            self.days.add_item(self.key, WED, "Associate 007", "Overtime", "", 60, self.omar, side="after")  # was a VTO (Phase AY)
         self.assertEqual(self.items()[0]["status"], "waiting")
 
     def test_no_settings_no_items(self):

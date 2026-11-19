@@ -1,0 +1,31 @@
+/* © 2026 Omar Mokhtar. All rights reserved. */
+.s8e11 { grid-column: 1 / 13; }
+.s11e11_25 { grid-column: 13 / 14; }
+.s11_25e13 { grid-column: 14 / 21; }
+.s13e13_5 { grid-column: 21 / 23; }
+.s13_5e17 { grid-column: 23 / 37; }
+.s8e10 { grid-column: 1 / 9; }
+.s10e10_25 { grid-column: 9 / 10; }
+.s10_25e12_5 { grid-column: 10 / 19; }
+.s12_5e13 { grid-column: 19 / 21; }
+.s13e17 { grid-column: 21 / 37; }
+.s9e12 { grid-column: 5 / 17; }
+.s12e12_5 { grid-column: 17 / 19; }
+.s12_5e14 { grid-column: 19 / 25; }
+.s14e14_25 { grid-column: 25 / 26; }
+.s14_25e18 { grid-column: 26 / 41; }
+.s9e11_5 { grid-column: 5 / 15; }
+.s11_5e11_75 { grid-column: 15 / 16; }
+.s11_75e14 { grid-column: 16 / 25; }
+.s14e14_5 { grid-column: 25 / 27; }
+.s14_5e18 { grid-column: 27 / 41; }
+.s12e14 { grid-column: 17 / 25; }
+.s14_25e16_5 { grid-column: 26 / 35; }
+.s16_5e17 { grid-column: 35 / 37; }
+.s17e21 { grid-column: 37 / 53; }
+.s12e15 { grid-column: 17 / 29; }
+.s15e15_25 { grid-column: 29 / 30; }
+.s15_25e17 { grid-column: 30 / 37; }
+.s17e17_5 { grid-column: 37 / 39; }
+.s17_5e20 { grid-column: 39 / 49; }
+.now-line { left: calc(var(--lab) + (100% - var(--lab)) * 0.5077); }

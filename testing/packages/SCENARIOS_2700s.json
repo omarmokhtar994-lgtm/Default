@@ -1,0 +1,99 @@
+{
+  "package": "RC9_2_1_COLAB_2700S_GATE_PACKAGE",
+  "engine_release": "L6.3.2.5-RC9.2.1-PROTECTED-TIER-RESIDUAL-BALANCE-RC1",
+  "engine_sha256": "880d638952550e4eb384306675a236611e525e7d00323957f908a26ca9d1b65d",
+  "purpose": "Run all 7 regression scenarios at a 2700s budget and score the release gates. Every published RC9.2.1 quality number so far came from a 900s run against a DEEP design point of 14400s, where the engine explores 1 of its 15 skeleton profiles. At 2700s it explores 3.",
+  "budget_rationale": {
+    "stage1_profiles_at_900s": 1,
+    "stage1_profiles_at_2700s": 3,
+    "stage1_profiles_at_14400s": 15,
+    "measured": "Cricut Chat retention loss went 15 -> 0 between 900s and 2700s"
+  },
+  "wall_clock_estimate_per_scenario_sec": 2700,
+  "scenarios": [
+    {
+      "scenario_id": "NMG_SP",
+      "input": "NMG_SP_RC9_1_READY_FIXED.xlsx",
+      "input_sha256": "33f540ffa1df748d5d8379ccbbbd3841c6285f17dee01d1ba66745ccb3b3b81a",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": "NMG SP",
+      "expected_target_ratio": 0.9,
+      "note": "has an RC9.1 baseline row - gates 2/9 comparable"
+    },
+    {
+      "scenario_id": "CRICUT_VOICE",
+      "input": "Cricut_Voice_RC9_1_READY_SKELETON.xlsx",
+      "input_sha256": "8e3833c9ef496b468503bf6f4a21f14a215f306173c68f41f2e35fb7cabe989f",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": "Cricut Voice",
+      "expected_target_ratio": 1.0,
+      "note": "has an RC9.1 baseline row - gates 2/9 comparable"
+    },
+    {
+      "scenario_id": "CRICUT_CHAT",
+      "input": "Cricut_Chat_RC9_1_READY_SKELETON.xlsx",
+      "input_sha256": "042a2d6217cf93e925f512bbcc07c4be6f64507be318c7c86cbf399b6e950ad9",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": null,
+      "expected_target_ratio": 1.0,
+      "note": "no RC9.1 baseline row - gates 2/9 will report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "AE_AR_B2B",
+      "input": "AE_AR_B2B.xlsx",
+      "input_sha256": "b7dcbbffeb19e05f1af4e2ff6b55197b8f8fef5ac50ea266e5e0e825f1a01288",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": "AE AR B2B",
+      "expected_target_ratio": 1.0,
+      "note": "has an RC9.1 baseline row - gates 2/9 comparable"
+    },
+    {
+      "scenario_id": "GDI_REAL28",
+      "input": "GDI_REAL28_RC9_1_24_7_FINAL_READY.xlsx",
+      "input_sha256": "edd1f1ec098f7efb0556a761147db7e3b88258030975f80be3b384b312b568ff",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": null,
+      "expected_target_ratio": null,
+      "note": "no RC9.1 baseline row - gates 2/9 will report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "NMG_EN_SP",
+      "input": "NMG_EN_AND_SP.xlsx",
+      "input_sha256": "d318723ae9e1eb1789504772f17503d6f78ad4cc12dfe7716bfa54000a56035a",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": null,
+      "expected_target_ratio": null,
+      "note": "no RC9.1 baseline row - gates 2/9 will report NOT_COMPARABLE"
+    },
+    {
+      "scenario_id": "NMG_EN",
+      "input": "NMG_EN_FIXED_NESTING_REST_SAFE_REGRESSION_CLEAN.xlsx",
+      "input_sha256": "ac24a0fe2793c118104b0674ee97b6f360746aac67eedb72bb63f1aef203a1ad",
+      "time_limit_sec": 2700,
+      "mode": "DEEP",
+      "solver_random_seed": 9000,
+      "num_workers": 4,
+      "rc9_1_baseline_scenario": null,
+      "expected_target_ratio": 0.9,
+      "note": "no RC9.1 baseline row - gates 2/9 will report NOT_COMPARABLE"
+    }
+  ]
+}

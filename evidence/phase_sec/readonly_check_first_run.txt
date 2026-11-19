@@ -1,0 +1,69 @@
+SEALED: /tmp/sec_tmp/readonly-check-au5paf1_/package is owned by root; the website's account can read and run it, not change it.
+PASS  the website's own tests that sign in and read pages (read-only code)
+PASS  explicit compile without a cache prefix is refused (as the earlier server run found)
+PASS  an explicit compile of the engine's file with the cache prefix works and writes nothing into the code
+PASS  the engine's selfcheck
+FAIL  the release gate (run_tests.sh)
+hrinkage 30 Min, Shrinkage 60 Min, Language Setup, Coverage Split; 9 reference tabs hidden
+VERIFIED: the engine reads the same contract from both workbooks (136 fields compared; provenance label only: coverage_objective_weighting_source, coverage_split_source).
+── tests_staged/test_rc9_2_58_engine_map.py
+Ran 6 tests in 9.925s
+
+OK
+── tests_staged/test_rc9_2_58_language_window_shift_rule.py
+Ran 16 tests in 17.779s
+
+OK
+── tests_staged/test_rc9_2_59_portfolio_rescue.py
+Ran 13 tests in 1.145s
+
+OK
+── tests_staged/test_rc9_2_5_joint_bound_shape.py
+Ran 3 tests in 0.015s
+
+OK
+── tests_staged/test_rc9_2_60_separate_off_in_preference.py
+Ran 14 tests in 3.358s
+
+OK
+── tests_staged/test_rc9_2_61_preference_swap.py
+Ran 15 tests in 0.789s
+
+OK
+── tests_staged/test_rc9_2_6_solver_telemetry.py
+Ran 5 tests in 0.089s
+
+OK
+── tests_staged/test_rc9_2_71_schedule_columns.py
+Ran 11 tests in 10.645s
+
+OK
+── tests_staged/test_rc9_2_7_solver_limits.py
+Ran 6 tests in 0.076s
+
+OK
+── tests_staged/test_rc9_2_8_joint_default.py
+Ran 5 tests in 0.056s
+
+OK
+── tests_staged/test_rc9_2_9_employee_quality_validation.py
+Ran 9 tests in 0.003s
+
+OK
+── engine selfcheck
+   engine selfcheck OK
+── wrapper selfcheck
+   wrapper selfcheck OK
+── cross-module call signatures
+   cross-module call signatures FAILED
+── undefined-name sweep
+   undefined-name sweep OK
+── test totals
+   1621 tests run, 2 skipped (minimum 1621 run, at most 3 skipped)
+
+GATE FAIL — see failures above
+run_tests.sh: line 134: /tmp/xmod.out: Permission denied
+
+
+FAILED: ['the release gate (run_tests.sh)']
+EXIT 1

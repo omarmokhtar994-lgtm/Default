@@ -1,0 +1,25 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Team Scheduler: disk alert (deploy/disk_alert.py). Started by disk-alert.timer; installed by deploy/setup_timers.sh.
+# Runs as the website's account: it reads the saved group link from the website's database (read-only) and keeps its state there.
+# Which LOB's group gets the alerts: ALERT_UNIT in /etc/scheduler/disk-alert.env (the LOB's name, never a link); the email: ALERT_EMAIL there.
+[Unit]
+Description=Team Scheduler disk alert
+
+[Service]
+Type=oneshot
+User=scheduler
+Group=scheduler
+Environment=SCHEDULER_DATA_DIR={{DATA_DIR}}
+Environment=DISK_PATH={{DATA_DIR}}
+Environment=PYTHONPATH={{APP_DIR}}/package
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/scheduler/disk-alert.env
+# Email password (Phase BU): systemd reads the root-only file and hands this service a private copy; the account never reads /etc/scheduler.
+LoadCredential=smtp-password:/etc/scheduler/smtp-password
+ExecStart={{APP_DIR}}/venv/bin/python {{APP_DIR}}/package/deploy/disk_alert.py
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{DATA_DIR}}
+ReadOnlyPaths={{APP_DIR}}/package {{APP_DIR}}/venv

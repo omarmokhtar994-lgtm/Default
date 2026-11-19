@@ -1,0 +1,8 @@
+SEALED: /tmp/sec_tmp/readonly-check-kf75qftc/package is owned by root; the website's account can read and run it, not change it.
+PASS  the website's own tests that sign in and read pages (read-only code)
+PASS  explicit compile without a cache prefix is refused (as the earlier server run found)
+PASS  an explicit compile of the engine's file with the cache prefix works and writes nothing into the code
+PASS  the release gate (run_tests.sh)
+
+ALL STEPS PASSED: nothing tried to write the code folder.
+EXIT 0

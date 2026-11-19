@@ -1,0 +1,52 @@
+/* © 2026 Omar Mokhtar. All rights reserved. */
+/* Sample: dashboards with a little CSS-only depth. Real look tokens come from webapp/static/app.css. No filter, no blur, no animation
+   except one hover lift, transform and opacity only, no inline style (heights and widths are classes, as the strict CSP needs). */
+body { display: block; padding: 22px clamp(14px, 3vw, 40px) 40px; }
+.sample { max-width: 1180px; margin: 0 auto; display: grid; gap: 26px; }
+.sample > header { background: var(--console); border: 1px solid var(--rail); border-radius: var(--r-panel); padding: 16px 20px; }
+.sample > header h1 { font: 700 1.5rem/1.2 var(--display); margin: 0 0 4px; }
+.sample > header p, .note { color: var(--dim); margin: 0; max-width: 70ch; }
+.sample h2 { font: 700 1.1rem/1.3 var(--display); margin: 0 0 4px; }
+.sec { background: var(--console); border: 1px solid var(--rail); border-radius: var(--r-panel); padding: 18px 20px 22px; display: grid; gap: 14px; }
+
+/* A. Home figures: a slab with a visible edge. The edge is box-shadow, so it costs no extra layer. */
+.slabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; padding-bottom: 8px; }
+.slab { position: relative; background: var(--console-2); border: 1px solid var(--rail); border-radius: var(--r-ctl); padding: 14px 16px 16px;
+  box-shadow: 0 1px 0 var(--edge), 0 5px 0 -1px var(--rail), 0 14px 18px -10px var(--shadow); transition: transform .18s cubic-bezier(.23,1,.32,1), box-shadow .18s cubic-bezier(.23,1,.32,1); }
+.slab h3 { margin: 0; font: 600 .85rem/1.3 var(--text); color: var(--dim); }
+.slab b { display: block; font: 700 2.4rem/1.05 var(--display); }
+.slab small { color: var(--dim); }
+.slab .ok { color: var(--covered-text); } .slab .warn { color: var(--short); }
+@media (hover: hover) and (pointer: fine) {
+  .slab:hover { transform: translateY(-3px); box-shadow: 0 1px 0 var(--edge), 0 8px 0 -1px var(--rail), 0 20px 22px -10px var(--shadow); }
+}
+
+/* B. Column chart: each column is a front face plus two pseudo faces (top and side). No extra elements. */
+.cols { display: flex; align-items: flex-end; gap: 28px; height: 14rem; padding: 0 1.4rem 0 .2rem; border-bottom: 2px solid var(--rail); }
+.col3 { --c: var(--c-blue); position: relative; flex: 1 1 0; max-width: 6rem; background: var(--c); min-width: 1rem; border-radius: 1px 1px 0 0; }
+.col3::before, .col3::after { content: ""; position: absolute; }
+.col3::before { left: 0; bottom: 100%; width: 100%; height: .6rem; background: color-mix(in srgb, var(--c) 68%, #fff); transform-origin: bottom left; transform: skewX(-45deg); }
+.col3::after { left: 100%; top: 0; width: .6rem; height: 100%; background: color-mix(in srgb, var(--c) 62%, #000); transform-origin: top left; transform: skewY(-45deg); }
+.col3.o { --c: var(--c-orange); } .col3.a { --c: var(--c-aqua); } .col3.y { --c: var(--c-yellow); }
+.col3 span { position: absolute; left: 0; right: 0; bottom: calc(100% + .9rem); text-align: center; font: 600 .78rem/1 var(--text); color: var(--paper); }
+.hb0 { height: 4%; } .hb1 { height: 12%; } .hb2 { height: 22%; } .hb3 { height: 32%; } .hb4 { height: 42%; } .hb5 { height: 52%; }
+.hb6 { height: 62%; } .hb7 { height: 72%; } .hb8 { height: 82%; } .hb9 { height: 90%; } .hb10 { height: 100%; }
+.axis { display: flex; gap: 28px; padding: 0 1.4rem 0 .2rem; color: var(--dim); font-size: .78rem; }
+.axis i { flex: 1 1 0; max-width: 6rem; min-width: 1rem; text-align: center; font-style: normal; }
+.cols-wrap { padding-top: 1.6rem; }
+
+/* C. Target bars: a flat bar with a lit top and a darker end. */
+.tbars { display: grid; gap: 22px; }
+.trow { display: grid; grid-template-columns: 7.5rem 1fr 4rem; align-items: center; gap: 12px; }
+.trow > b { font: 600 .9rem/1.2 var(--text); } .trow > em { font-style: normal; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.track { position: relative; height: 1rem; background: var(--empty-cell); border-radius: 2px; }
+.bar3 { --c: var(--covered); position: absolute; left: 0; top: 0; height: 100%; background: var(--c); }
+.bar3::before, .bar3::after { content: ""; position: absolute; }
+.bar3::before { left: 0; bottom: 100%; width: 100%; height: .4rem; background: color-mix(in srgb, var(--c) 68%, #fff); transform-origin: bottom left; transform: skewX(-45deg); }
+.bar3::after { left: 100%; top: 0; width: .4rem; height: 100%; background: color-mix(in srgb, var(--c) 60%, #000); transform-origin: top left; transform: skewY(-45deg); }
+.bar3.s { --c: var(--short); } .bar3.g { --c: var(--gap); } .bar3.v { --c: var(--over); }
+.w2 { width: 22%; } .w4 { width: 44%; } .w6 { width: 62%; } .w7 { width: 74%; } .w8 { width: 82%; } .w9 { width: 92%; } .w10 { width: 100%; }
+.key { display: flex; gap: 16px; flex-wrap: wrap; color: var(--dim); font-size: .85rem; }
+.key i { display: inline-block; width: .8rem; height: .8rem; margin-right: 6px; vertical-align: -1px; background: var(--k); }
+@media (max-width: 560px) { .trow { grid-template-columns: 5.5rem 1fr 3rem; } .cols { gap: 8px; } .axis { gap: 8px; } }
+@media (prefers-reduced-motion: reduce) { .slab { transition: none; } }

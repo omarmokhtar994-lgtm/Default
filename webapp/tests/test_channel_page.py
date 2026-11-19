@@ -94,6 +94,21 @@ class TheChannelPage(_Page):
                   end=f"{(start + 15) // 60:02d}:{(start + 15) % 60:02d}", channel="P")
         self.assertIn(f"{name} is on a break then", self.page()[1])
 
+    def test_the_consistency_tick_is_on_the_page_and_its_value_reaches_the_planner(self):
+        self.assertIn('name="consistent"', self.page()[1])
+        from unittest import mock
+        import webapp.app as app_module
+        seen = []
+        real = app_module.plan_day
+
+        def spy(people, setup, *a, **k):
+            seen.append(setup["rules"].get("consistent"))
+            return real(people, setup, *a, **k)
+        with mock.patch.object(app_module, "plan_day", spy):
+            self.post(action="suggest", move="1", consistent="1")
+            self.post(action="suggest", move="1")
+        self.assertEqual(seen, [True, False])
+
     def test_a_block_set_by_hand_is_checked_then_kept_in_the_draft(self):
         person = self.working()[1]
         lo, hi = shift_span(person["days"][WED])

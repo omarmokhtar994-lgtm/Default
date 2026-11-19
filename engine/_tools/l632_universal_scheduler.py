@@ -294,6 +294,7 @@ def cleanup_stale_run_outputs(
         output_path.with_name(prefix + "_MAX_FLOOR_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
+        output_path.with_name(prefix + "_PREFERENCE_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_SAFER_BALANCED_CANDIDATE" + output_path.suffix),
         output_path.with_name(prefix + "_HARD_RULE_SHORTFALL_SCHEDULE" + output_path.suffix),
         output_path.with_name(prefix + "_PARETO_EXPORT_MANIFEST.json"),
@@ -690,6 +691,11 @@ class Associate:
     previous_saturday: str = ""
     fixed_schedule: List[str] = field(default_factory=lambda: [""] * 7)
     nesting_group: str = ""
+    # Phase BL (owner, 2026-11-07): optional Schedule-sheet columns. None / False = the workbook's own default.
+    shift_minutes: Optional[int] = None
+    part_time: bool = False
+    off_days: Optional[int] = None
+    breaks_per_day: Optional[int] = None
 
 
 @dataclass
@@ -701,6 +707,8 @@ class Shift:
     duration_min: int
     # Phase F: a :30 twin added by "Allow Half-Hour Starts" (a marked fallback).
     half_hour_fallback: bool = False
+    # Phase BL: a shift length some Part time row names; others with no Shift Length of their own are not given it
+    part_time_only: bool = False
 
     @property
     def start_hour(self) -> int:
@@ -862,6 +870,9 @@ class ParsedInput:
     # with older ParsedInput fixtures.
     language_windows: Dict[str, Any] = field(default_factory=dict)
     language_working_window_mode: str = "OFF"
+    # Phase AQ: START (default) = only a shift's start has to be inside a language window; WHOLE_SHIFT = it must start
+    # and end inside. Only matters where language_working_window_mode applies a window.
+    language_window_shift_rule: str = "START"
     # None = the engine default (SHIFT_CONSISTENCY_POLISH_ENABLED); Yes/No in
     # the workbook's "Shift Consistency Polish" row overrides it.
     shift_consistency_polish: Optional[bool] = None
@@ -1682,6 +1693,41 @@ def _day_columns(ws: Any, header: int) -> List[int]:
     return []
 
 
+_PART_TIME_WORDS = {"parttime": True, "part": True, "pt": True, "fulltime": False, "full": False, "ft": False}
+
+
+def _roster_option(kind: str, value: Any) -> Tuple[bool, Any]:
+    """Phase BL: one optional Schedule-sheet cell. (True, value) when blank (None) or readable, (False, None) when it cannot be read.
+    ``kind``: "hours" (a shift length, 4 to 16 hours, returned in minutes), "type" (part time or full time),
+    "days" (off days, 0 to 6) or "count" (breaks a day, 0 to 6)."""
+    if value is None or str(value).strip() == "":
+        return True, None
+    text = str(value).strip()
+    if kind == "type":
+        word = re.sub(r"[^a-z]", "", text.casefold())
+        return (True, _PART_TIME_WORDS[word]) if word in _PART_TIME_WORDS else (False, None)
+    tokens = re.findall(r"\d+(?:\.\d+)?", text)
+    if isinstance(value, bool) or len(tokens) != 1 or re.search(r"[-+]", text):
+        return False, None
+    number = float(tokens[0])
+    if kind == "hours":
+        minutes = int(round(number * 60))
+        return (True, minutes) if 240 <= minutes <= 960 else (False, None)
+    if number != int(number) or re.search(r"[a-z]", text.casefold()):
+        return False, None
+    return (True, int(number)) if 0 <= int(number) <= 6 else (False, None)
+
+
+_ROSTER_OPTIONS = (("shift_minutes", "hours", ("shift length",), "HARD_INVALID_SHIFT_LENGTH",
+                    "use hours between 4 and 16, for example 8.5 or 9"),
+                   ("part_time", "type", ("employment type",), "HARD_INVALID_ASSOCIATE_TYPE",
+                    "use Full time or Part time"),
+                   ("off_days", "days", ("off days",), "HARD_INVALID_OFF_DAYS",
+                    "use a whole number of off days from 0 to 6"),
+                   ("breaks_per_day", "count", ("breaks per day",), "HARD_INVALID_BREAKS",
+                    "use a whole number of breaks a day from 0 to 6"))
+
+
 def _parse_roster(
     wb: Any,
     prefer_final: bool = False,
@@ -1751,13 +1797,23 @@ def _parse_roster(
             seen_emp_ids[employee_id] = r
         fixed = ([str(ws.cell(r, c).value or "").strip() for c in day_cols]
                  if len(day_cols) == 7 else [""] * 7)
+        options: Dict[str, Any] = {}
+        for attr, kind, names, code, advice in _ROSTER_OPTIONS:
+            col = next((headers[h] for h in names if h in headers), None)
+            if col is None:
+                continue
+            ok, parsed_value = _roster_option(kind, ws.cell(r, col).value)
+            if not ok and parser_warnings is not None:
+                parser_warnings.append(f"{code}:associate={name!r};row={r};value={ws.cell(r, col).value!r}; {advice}")
+            elif parsed_value is not None:
+                options[attr] = parsed_value
         associates.append(Associate(
             index=len(associates), row=r, slot=ws.cell(r, 1).value,
             emp_id=raw_emp_id,
             email=str(ws.cell(r, email_col).value or "").strip(),
             name=name, tl=str(ws.cell(r, tl_col).value or "").strip(),
             language=str(ws.cell(r, lang_col).value or "").strip(),
-            fixed_schedule=fixed,
+            fixed_schedule=fixed, **options,
         ))
     if not associates:
         raise ValueError("No roster rows found in Schedule")
@@ -2734,7 +2790,7 @@ def coverage_split_capacity_report(parsed: ParsedInput) -> Dict[str, Any]:
         # Everyone owes the roster its OFF days, so the pool that can be on the
         # floor at one instant is smaller than the headcount on the sheet.
         workdays = default_workdays_per_week(parsed)
-        concurrent_ceiling = int(math.floor(len(pool) * workdays / 7.0)) if pool else 0
+        concurrent_ceiling = int(math.floor(sum(associate_workdays(parsed, a) for a in pool) / 7.0)) if pool else 0
         # And a rostered person on a break is not covering. Sustaining `need`
         # through the break window costs need / (1 - break fraction) bodies.
         # Omitting this reported "8 eligible, peak need 4 - fits" on Cricut
@@ -3061,6 +3117,50 @@ def _parse_break_segments(
 BREAK_SET_ROW_PATTERN = re.compile(r"^break set for shifts of (\d+(?:\.\d+)?) hours? or more$")
 
 
+def _apply_associate_break_counts(
+    associates: Sequence[Associate], shifts: Sequence[Shift], global_segments: Tuple[Tuple[int, str], ...],
+    sets: Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...], parser_warnings: List[str],
+) -> Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...]:
+    """Phase BL (owner, 2026-11-07): a Schedule row's ``Breaks`` N gives the shift length on that row the first N breaks of the break set
+    it would have had. Break sets belong to a shift length, so everything downstream (the patterns, the capacity estimates, the checks)
+    follows. Refused by name: Breaks without a Shift Length, two rows with one Shift Length and different Breaks, and more Breaks than
+    the set has. Returns ``sets`` untouched when no row asks."""
+    def base(duration: int) -> Tuple[Tuple[int, str], ...]:
+        chosen = global_segments
+        for threshold, segments in sets:
+            if duration >= int(threshold):
+                chosen = segments
+        return chosen
+
+    wanted: Dict[int, List[Associate]] = {}
+    for associate in associates:
+        if associate.breaks_per_day is None:
+            continue
+        if associate.shift_minutes is None:
+            parser_warnings.append(f"HARD_BREAKS_NEED_SHIFT_LENGTH:associate={associate.name!r};row={associate.row}; Breaks is the "
+                                   "number of breaks on a shift of the Shift Length on the same row: fill in Shift Length too")
+            continue
+        wanted.setdefault(associate.shift_minutes, []).append(associate)
+    overrides: Dict[int, Tuple[Tuple[int, str], ...]] = {}
+    for minutes, people in sorted(wanted.items()):
+        counts = sorted({p.breaks_per_day for p in people})
+        names = [p.name for p in people]
+        if len(counts) > 1:
+            parser_warnings.append(f"HARD_BREAKS_CONFLICT:shift_length_hours={minutes / 60:g};associates={names!r};breaks={counts!r}; "
+                                   "rows with the same Shift Length must have the same Breaks, because break sets belong to a shift length")
+            continue
+        segments = base(minutes)
+        if counts[0] > len(segments):
+            parser_warnings.append(f"HARD_BREAKS_EXCEED_SET:shift_length_hours={minutes / 60:g};associates={names!r};breaks={counts[0]};"
+                                   f"set_has={len(segments)}; a shift of that length has {len(segments)} breaks in its break set")
+            continue
+        overrides[minutes] = segments[:counts[0]]
+    if not overrides:
+        return sets
+    durations = sorted({s.duration_min for s in shifts} | set(overrides))
+    return tuple(sorted((d, overrides.get(d, base(d))) for d in durations))
+
+
 def _parse_break_sets_by_shift_length(
     im: Dict[str, Any], parser_warnings: List[str]
 ) -> Tuple[Tuple[int, Tuple[Tuple[int, str], ...]], ...]:
@@ -3345,6 +3445,23 @@ def normalize_language_window_mode(raw: Any) -> str:
     return "OFF"
 
 
+LANGUAGE_WINDOW_SHIFT_RULES = ("START", "WHOLE_SHIFT")
+_START_RULE_TOKENS = {"start", "starts", "startonly", "startsonly", "shiftstart", "shiftstartonly"}
+_WHOLE_RULE_TOKENS = {"wholeshift", "wholeshifts", "entireshift", "startandend", "wholeshiftstartandend",
+                      "shiftstartandend", "bothends"}
+
+
+def normalize_language_window_shift_rule(raw: Any) -> str:
+    """Phase AQ (owner, 2026-10-21): what a Language Working Window limits. START is the default and what the engine
+    has always done (the shift's start must be inside the window; see ``shift_within_language_window``). WHOLE_SHIFT
+    makes the shift start and end inside it. Blank is START; an unreadable value is refused by the parser
+    (HARD_INVALID_LANGUAGE_WINDOW_SHIFT_RULE), never silently read as START."""
+    text = re.sub(r"[^a-z0-9]", "", norm(raw))
+    if text in _WHOLE_RULE_TOKENS:
+        return "WHOLE_SHIFT"
+    return "START"
+
+
 def _coerce_language_window_entries(value: Any) -> List[Tuple[int, int, bool]]:
     """Normalize legacy single-window and current multi-window values."""
     if value is None:
@@ -3396,8 +3513,8 @@ def associate_language_window(
     return windows[0] if windows else None
 
 
-def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
-    """True when the shift's START falls inside the window.
+def shift_within_language_window(shift: Shift, window: Tuple[int, int], whole_shift: bool = False) -> bool:
+    """True when the shift's START falls inside the window (with ``whole_shift`` its END must too: Phase AQ).
 
     This is deliberately the same rule `shift_start_contract_allows` already
     uses for the workbook's "Allowed Shift Start Window": the window says when
@@ -3420,7 +3537,17 @@ def shift_within_language_window(shift: Shift, window: Tuple[int, int]) -> bool:
     start, end = window
     span = (end - start) % 1440 or 1440
     offset = (shift.start_min - start) % 1440
-    return offset < span
+    if offset >= span:
+        return False
+    # WHOLE_SHIFT (opt-in): the shift also has to finish by the window's close, as the first version of this rule did.
+    # On a window shorter than the shift nothing fits; a window of the whole day (start == end) fits every shift.
+    return not whole_shift or span == 1440 or offset + int(shift.duration_min) <= span
+
+
+def language_window_allows(parsed: ParsedInput, shift: Shift, window: Tuple[int, int]) -> bool:
+    """``shift_within_language_window`` under the input's Language Working Window Shift Rule (Phase AQ)."""
+    return shift_within_language_window(
+        shift, window, whole_shift=getattr(parsed, "language_window_shift_rule", "START") == "WHOLE_SHIFT")
 
 
 def shift_overlaps_required_language_for_noneligible(
@@ -3471,7 +3598,7 @@ def language_working_window_violations(
         if not entries:
             continue
         shift = parsed.shifts[si]
-        if any(shift_within_language_window(shift, window) for window in entries):
+        if any(language_window_allows(parsed, shift, window) for window in entries):
             continue
         rows.append({
             "associate": assoc.name, "language": getattr(assoc, "language", ""),
@@ -3511,7 +3638,7 @@ def fixed_requests_outside_language_windows(parsed: ParsedInput) -> List[Dict[st
             windows = associate_language_windows(parsed, assoc, day=d)
             if shift is None or not windows:
                 continue
-            if any(shift_within_language_window(shift, window) for window in windows):
+            if any(language_window_allows(parsed, shift, window) for window in windows):
                 continue
             rows.append({
                 "associate": assoc.name, "language": getattr(assoc, "language", ""),
@@ -3833,6 +3960,10 @@ def parse_input(
     language_window_raw = _instruction_get(
         im, ["Language Working Window", "Language Working Hours",
              "Language Window Enforcement"], None)
+    language_window_shift_rule_raw = _instruction_get(
+        im, ["Language Working Window Shift Rule", "Language Window Shift Rule",
+             "Language Working Window Applies To"], None)
+    language_window_shift_rule = normalize_language_window_shift_rule(language_window_shift_rule_raw)
     run_stage = normalize_run_stage(run_stage_raw)
     run_depth = normalize_run_depth(run_depth_raw)
     language_working_window_mode = normalize_language_window_mode(language_window_raw)
@@ -3846,6 +3977,13 @@ def parse_input(
             f"HARD_INVALID_RUN_DEPTH:value={run_depth_raw!r};"
             "use QUICK, DEEP, or OVERNIGHT"
         )
+    if language_window_shift_rule_raw not in (None, ""):
+        shift_rule_token = re.sub(r"[^a-z0-9]", "", norm(language_window_shift_rule_raw))
+        if shift_rule_token not in _START_RULE_TOKENS | _WHOLE_RULE_TOKENS:
+            parser_warnings.append(
+                f"HARD_INVALID_LANGUAGE_WINDOW_SHIFT_RULE:value={language_window_shift_rule_raw!r};"
+                "use START or WHOLE_SHIFT"
+            )
     if language_window_raw not in (None, ""):
         language_mode_token = re.sub(r"[^a-z0-9]", "", norm(language_window_raw))
         valid_language_tokens = {
@@ -3901,6 +4039,10 @@ def parse_input(
 
     break_segments = _parse_break_segments(im, parser_warnings)
     break_sets_by_length = _parse_break_sets_by_shift_length(im, parser_warnings)
+    break_sets_by_length = _apply_associate_break_counts(associates, shifts, break_segments, break_sets_by_length, parser_warnings)
+    part_time_lengths = [a.shift_minutes for a in associates if getattr(a, "part_time", False) and a.shift_minutes is not None]
+    for shift in shifts:   # Phase BL: after the half-hour twins, so a twin is reserved with its shift
+        shift.part_time_only = any(abs(shift.duration_min - m) <= 5 for m in part_time_lengths)
     _weighting_raw = _instruction_get(im, ["Coverage Objective Weighting", "Coverage Weighting"], None)
     coverage_objective_weighting = "interval_count"
     coverage_objective_weighting_source = "default"
@@ -4245,6 +4387,7 @@ def parse_input(
         run_depth=run_depth,
         language_windows=language_windows,
         language_working_window_mode=language_working_window_mode,
+        language_window_shift_rule=language_window_shift_rule,
         shift_consistency_polish=shift_consistency_polish,
         aggregate_guide_mixed_durations=aggregate_guide_mixed_durations,
         exact_coverage_units=exact_coverage_units,
@@ -4340,6 +4483,8 @@ def input_contract_payload(parsed: ParsedInput) -> Dict[str, Any]:
     # fingerprint; turning the switch on is a visible contract change.
     if getattr(parsed, "aggregate_guide_mixed_durations", False):
         payload["aggregate_guide_mixed_durations"] = True
+    if getattr(parsed, "language_window_shift_rule", "START") != "START":
+        payload["language_window_shift_rule"] = parsed.language_window_shift_rule  # Phase AQ: only when on
     if getattr(parsed, "exact_coverage_units", False):
         payload["exact_coverage_units"] = True
     if getattr(parsed, "allow_half_hour_starts", False):
@@ -4674,6 +4819,16 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             failures.append(row)
     if not parsed.shifts:
         failures.append({"code": "NO_LEGAL_SHIFTS", "detail": "No legal shifts were parsed from Shift Library."})
+    for associate in parsed.associates:  # Phase BL: a named Shift Length needs a shift of that length
+        if getattr(associate, "shift_minutes", None) is not None and parsed.shifts and not any(
+                shift_length_allows(associate, shift) for shift in parsed.shifts):
+            failures.append({
+                "code": "ASSOCIATE_SHIFT_LENGTH_NOT_IN_LIBRARY", "associate": associate.name,
+                "shift_length_hours": associate.shift_minutes / 60.0,
+                "detail": (f"{associate.name} is set to {associate.shift_minutes / 60.0:g} hour shifts, but the Shift Library has "
+                           f"none of that length. Add shifts of {associate.shift_minutes / 60.0:g} hours to Shift Library and "
+                           f"list {associate.shift_minutes / 60.0:g} in Allowed Shift Durations Hours."),
+            })
     # Every coverage function floors to 15-minute quarters (start_min // 15,
     # duration_min // 15), and _parse_shifts accepts any duration within 5
     # minutes of an allowed one. An off-grid shift would therefore be modelled
@@ -4875,7 +5030,8 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
         room = 7 - len(leave_days)
 
         def fits(long_mode: bool) -> bool:
-            owed = max(0, min(3 if long_mode else 2, room))
+            own = getattr(associate, "off_days", None)
+            owed = max(0, min(own if own is not None else (3 if long_mode else 2), room))
             if parsed.strict_off:
                 return len(off_days) <= owed and len(shift_days) + owed <= room
             return len(shift_days) + min(2, room) <= room
@@ -4883,7 +5039,8 @@ def validate_input_contract(parsed: ParsedInput, feasibility: Optional[Dict[str,
             week_conflicts.append({
                 "associate": associate.name, "leave_days": leave_days, "requested_off_days": off_days,
                 "fixed_shift_days": shift_days, "days_with_two_requests": clashes,
-                "off_days_owed": sorted({max(0, min(3 if m else 2, room)) for m in long_modes}),
+                "off_days_owed": sorted({max(0, min(getattr(associate, "off_days", None) if getattr(associate, "off_days", None) is not None
+                                                     else (3 if m else 2), room)) for m in long_modes}),
                 "strict_off": parsed.strict_off,
             })
     if week_conflicts:
@@ -5671,14 +5828,39 @@ def required_off_days(parsed: ParsedInput, associate: Associate, long_mode: bool
     days are affected; for everyone else this returns 2 or 3 exactly as before.
     """
     leave_days = pinned_leave_days(parsed, associate, honour_fixed, honour_leave)
+    if getattr(associate, "off_days", None) is not None:  # Phase BL: the Schedule sheet's own count for this person (a part-timer)
+        return max(0, min(associate.off_days, 7 - leave_days))
     return max(0, min(3 if long_mode else 2, 7 - leave_days))
 
 
+
+def separate_off_in_preference(parsed: ParsedInput, associate: Associate, hard: Optional[HardConfig] = None) -> bool:
+    """Whether this associate's own request rows name hard OFF days that are not next to each other (Phase BD, owner, 2026-10-29: "if I
+    added in Preference a separate OFF, accept it even if the instructions say no separate OFF; stick to the instructions except for what is
+    mentioned in Preference", and "make Fixed like Preference"). The Preference row counts when Hard OFF Preferences is Yes, the Fixed Request
+    row when Fixed Request Use is Yes, and the two together. Only then is the consecutive-OFF rule lifted for that person; everyone else keeps
+    it. The week wraps (Saturday is next to Sunday), as in the rule itself. Nothing changes when Separate OFF Days is already Yes."""
+    if parsed.separate_off_days:
+        return False
+    days = set()
+    for d in range(7):
+        pref = associate.preferences[d] if d < len(associate.preferences) else ""
+        fixed = associate.fixed_schedule[d] if d < len(associate.fixed_schedule) else ""
+        if ((parsed.hard_off and (hard is None or hard.hard_off)) and preference_kind(pref) == "off") or (
+                (parsed.fixed_enabled and (hard is None or hard.fixed)) and preference_kind(fixed) == "off"):
+            days.add(d)
+    return len(days) >= 2 and any((d + 1) % 7 not in days and (d - 1) % 7 not in days for d in days)
+
 def add_weekly_off_rule(model: Any, off_vars: Sequence[Any], long_mode_var: Any, leave_days: int,
-                        strict: bool, consecutive_required: bool, name: str) -> None:
-    """The weekly OFF rule, shared by every model that decides OFF days."""
+                        strict: bool, consecutive_required: bool, name: str, owed: Optional[int] = None) -> None:
+    """The weekly OFF rule, shared by every model that decides OFF days. ``owed`` (Phase BL) is the Schedule sheet's own OFF count
+    for this person; without it the rule is the usual 2, or 3 on the 11H/3OFF pattern."""
     room = 7 - int(leave_days)
-    if strict:
+    if owed is not None:
+        owed = max(0, min(int(owed), room))
+        model.Add(sum(off_vars) == owed) if strict else model.Add(sum(off_vars) >= owed)
+        room = owed if strict else room
+    elif strict:
         if room >= 3:
             model.Add(sum(off_vars) == 2 + long_mode_var)
         else:
@@ -6770,6 +6952,7 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
     fixed_shift_counts: Dict[Tuple[int, int], int] = {}
     hard_off_day_counts: List[int] = [0] * 7
     forced_off_pair_counts: List[int] = [0] * 7
+    separate_asked, separate_asked_days = 0, [0] * 7  # Phase BD: associates whose Preference asks for separate OFF days, and per day
     fixed_aware_associates: Set[int] = set()
     missing_fixed_shift_pairs: List[Dict[str, Any]] = []
     for a, associate in enumerate(parsed.associates):
@@ -6803,6 +6986,11 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
                 if hard_off_flags[d] and hard_off_flags[(d + 1) % 7]:
                     forced_off_pair_counts[d] += 1
                     break
+        if separate_off_in_preference(parsed, associate):  # Phase BD: their OFF days are the ones asked for, not a pair
+            separate_asked += 1
+            for d in range(7):
+                if hard_off_flags[d]:
+                    separate_asked_days[d] += 1
 
     off_pair_index: Dict[int, int] = {}
     off_day_index: Dict[int, int] = {}
@@ -6837,21 +7025,21 @@ def aggregate_pattern_mix_guidance(parsed: ParsedInput, time_limit_sec: float = 
         fixed_aware_constraint_count += 1
 
     if off_pair_index:
-        add_constraint({index: 1.0 for index in off_pair_index.values()}, associates, associates)
+        add_constraint({index: 1.0 for index in off_pair_index.values()}, associates - separate_asked, associates - separate_asked)
         for d, forced_count in enumerate(forced_off_pair_counts):
             if forced_count:
                 add_constraint({off_pair_index[d]: 1.0}, forced_count, float("inf"))
                 fixed_aware_constraint_count += 1
         for d in range(7):
-            if hard_off_day_counts[d]:
-                add_constraint({off_pair_index[d]: 1.0, off_pair_index[(d - 1) % 7]: 1.0}, hard_off_day_counts[d], float("inf"))
+            if hard_off_day_counts[d] - separate_asked_days[d] > 0:
+                add_constraint({off_pair_index[d]: 1.0, off_pair_index[(d - 1) % 7]: 1.0}, hard_off_day_counts[d] - separate_asked_days[d], float("inf"))
                 fixed_aware_constraint_count += 1
             coefficients: Dict[int, float] = {
                 index: 1.0 for (day, _), index in x_index.items() if day == d
             }
             coefficients[off_pair_index[d]] = coefficients.get(off_pair_index[d], 0.0) + 1.0
             coefficients[off_pair_index[(d - 1) % 7]] = coefficients.get(off_pair_index[(d - 1) % 7], 0.0) + 1.0
-            rhs = associates - leave_counts[d]
+            rhs = associates - leave_counts[d] - separate_asked_days[d]
             add_constraint(coefficients, rhs, rhs)
     else:
         add_constraint({index: 1.0 for index in off_day_index.values()}, 2 * associates, 2 * associates)
@@ -7788,7 +7976,7 @@ def build_skeleton(
                 windows = associate_language_windows(parsed, assoc, day=d)
                 if windows:
                     for shift in parsed.shifts:
-                        if not any(shift_within_language_window(shift, window) for window in windows):
+                        if not any(language_window_allows(parsed, shift, window) for window in windows):
                             model.Add(x[a, d, shift.index] == 0)
                             language_working_window_blocks += 1
                 for shift in parsed.shifts:
@@ -7798,6 +7986,10 @@ def build_skeleton(
                     if blocked_rule is not None:
                         model.Add(x[a, d, shift.index] == 0)
                         language_working_window_blocks += 1
+        for shift in parsed.shifts:  # Phase BL: a named Shift Length is a hard rule
+            if not shift_length_allows(assoc, shift):
+                for d in range(D):
+                    model.Add(x[a, d, shift.index] == 0)
         if assoc.nesting_group:
             fixed_group_members.setdefault(norm(assoc.nesting_group), []).append(a)
         for d in range(D):
@@ -7834,7 +8026,8 @@ def build_skeleton(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, assoc, honour_fixed=hard.fixed, honour_leave=hard.leave),
             strict=bool(hard.strict_off and parsed.strict_off),
-            consecutive_required=not parsed.separate_off_days, name=f"stage1_{a}")
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, assoc, hard)), name=f"stage1_{a}",
+            owed=getattr(assoc, "off_days", None))
         if hard.max_shift_variety:
             model.Add(sum(y[a, s] for s in range(S)) <= parsed.max_different_shifts)
         if profile["shift_variety"]:
@@ -11530,6 +11723,29 @@ def compact_metric_surface(metrics: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def shift_length_allows(associate: Associate, shift: Shift) -> bool:
+    """Phase BL (owner, 2026-11-07): an associate whose Schedule row names a Shift Length may only work shifts of that length
+    (within the library's 5 minute tolerance). No length named: every shift is allowed, as before."""
+    minutes = getattr(associate, "shift_minutes", None)
+    if minutes is None:
+        return not (getattr(shift, "part_time_only", False) and not getattr(associate, "part_time", False))
+    return abs(shift.duration_min - minutes) <= 5
+
+
+def shift_length_failures(parsed: ParsedInput, skeleton: Any) -> List[Dict[str, Any]]:
+    """Phase BL: scheduled shifts whose length is not the one the associate's row names."""
+    failures: List[Dict[str, Any]] = []
+    for a, assoc in enumerate(parsed.associates):
+        if getattr(assoc, "shift_minutes", None) is None:
+            continue
+        for d in range(7):
+            si = skeleton.selected_shift_index[a][d]
+            if si is not None and not shift_length_allows(assoc, parsed.shifts[si]):
+                failures.append({"type": "shift_length", "associate": assoc.name, "day": DAY_NAMES[d],
+                                 "shift": parsed.shifts[si].label, "expected_minutes": assoc.shift_minutes})
+    return failures
+
+
 def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day: int) -> List[Shift]:
     """Return shifts that can possibly be used by one associate-day before weekly coupling.
 
@@ -11554,10 +11770,12 @@ def associate_day_eligible_shifts(parsed: ParsedInput, associate: Associate, day
         candidates = list(parsed.shifts)
     result: List[Shift] = []
     for shift in candidates:
+        if not shift_length_allows(associate, shift):
+            continue
         if day == 0 and not previous_saturday_compatible(associate.previous_saturday, shift, parsed.rest_gap_hours):
             continue
         windows = associate_language_windows(parsed, associate, day=day)
-        if windows and not any(shift_within_language_window(shift, window) for window in windows):
+        if windows and not any(language_window_allows(parsed, shift, window) for window in windows):
             continue
         if shift_overlaps_required_language_for_noneligible(parsed, associate, shift, day) is not None:
             continue
@@ -11748,7 +11966,8 @@ def break_resilience_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     weekly_rows: List[Dict[str, Any]] = []
     for summary in weekly_groups.values():
         eligible_count = len(summary["eligible_associates"])
-        available_worker_days = eligible_count * default_workdays
+        available_worker_days = sum(associate_workdays(parsed, a) for a in parsed.associates
+                                    if a.name in summary["eligible_associates"])
         required_worker_days = summary["active_days"] * (summary["minimum"] + 1)
         shortage = max(0, required_worker_days - available_worker_days)
         row = {
@@ -11791,7 +12010,7 @@ def capacity_diagnostics(parsed: ParsedInput) -> Dict[str, Any]:
     """
     leave_days = sum(1 for assoc in parsed.associates for value in assoc.preferences if preference_kind(value) == "leave")
     default_workdays = default_workdays_per_week(parsed)
-    working_shifts = max(0, len(parsed.associates) * default_workdays - leave_days)
+    working_shifts = max(0, sum(associate_workdays(parsed, assoc) for assoc in parsed.associates) - leave_days)
     avg_shift_hours = sum(s.duration_min for s in parsed.shifts) / max(1, len(parsed.shifts)) / 60.0
     break_hours = (sum(break_quarters_for(parsed, s.duration_min) for s in parsed.shifts)
                    / max(1, len(parsed.shifts))) * 0.25
@@ -12310,14 +12529,14 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
             si = skeleton.selected_shift_index[a][d]
             if si is not None and getattr(parsed, "language_working_window_mode", "OFF") != "OFF":
                 windows = associate_language_windows(parsed, assoc, day=d)
-                if windows and not any(shift_within_language_window(parsed.shifts[si], w) for w in windows):
+                if windows and not any(language_window_allows(parsed, parsed.shifts[si], w) for w in windows):
                     failures.append({"type": "language_working_window", "associate": assoc.name,
                                      "day": DAY_NAMES[d], "shift": parsed.shifts[si].label})
                 if shift_overlaps_required_language_for_noneligible(parsed, assoc, parsed.shifts[si], d) is not None:
                     failures.append({"type": "required_language_only", "associate": assoc.name,
                                      "day": DAY_NAMES[d], "shift": parsed.shifts[si].label})
         off_days = [d for d in range(7) if skeleton.assignment[a][d] == "OFF"]
-        if parsed.strict_off and not parsed.separate_off_days and expected_off >= 2 and not any(
+        if parsed.strict_off and not parsed.separate_off_days and expected_off >= 2 and not separate_off_in_preference(parsed, assoc) and not any(
                 (d + 1) % 7 in off_days for d in off_days):
             failures.append({"type": "consecutive_off", "associate": assoc.name,
                              "off_days": [DAY_NAMES[d] for d in off_days]})
@@ -12368,6 +12587,7 @@ def validate_schedule(parsed: ParsedInput, skeleton: SkeletonSolution, breaks: B
             "blank_staffed_quarters": metrics.get("week_boundary_blank_staffed_quarters", 0),
             "floor_ratio": parsed.floor_ratio,
         })
+    failures.extend(shift_length_failures(parsed, skeleton))  # Phase BL
     structural = structural_schedule_audit(parsed, skeleton, breaks)
     failures.extend(structural.get("hard_failures", []))
     return {
@@ -14039,8 +14259,18 @@ EXPORT_ROLE_ORDER: Tuple[str, ...] = (
     # The selected schedule with a more uniform week per associate (the
     # shift-consistency polish), published beside it, never in its place (F-35).
     "MORE_CONSISTENT_CANDIDATE",
+    # The selected schedule with same-day swaps toward each associate's Preference
+    # shift (Phase BE), published beside it, never in its place (F-35).
+    "PREFERENCE_CANDIDATE",
     "BALANCED_CANDIDATE",
 )
+
+
+def associate_workdays(parsed: ParsedInput, associate: Associate) -> int:
+    """Phase BL: days one associate works in a week for the capacity estimates: the usual week, or 7 minus the OFF days the Schedule
+    sheet gives this person (a part-timer)."""
+    off_days = getattr(associate, "off_days", None)
+    return default_workdays_per_week(parsed) if off_days is None else 7 - off_days
 
 
 def default_workdays_per_week(parsed: ParsedInput) -> int:
@@ -16601,6 +16831,9 @@ def solve_joint_shift_off_language_break_refinement(
                     model.Add(x[a, d, s_index] == 0)
                     continue
                 shift = parsed.shifts[s_index]
+                if not shift_length_allows(parsed.associates[a], shift):  # Phase BL
+                    model.Add(x[a, d, s_index] == 0)
+                    continue
                 if shift_overlaps_required_language_for_noneligible(
                     parsed, parsed.associates[a], shift, d
                 ) is not None:
@@ -16759,8 +16992,9 @@ def solve_joint_shift_off_language_break_refinement(
         add_weekly_off_rule(
             model, [off[a, d] for d in range(D)], long_mode[a],
             pinned_leave_days(parsed, parsed.associates[a]),
-            strict=bool(parsed.strict_off), consecutive_required=not parsed.separate_off_days,
-            name=f"joint_{a}")
+            strict=bool(parsed.strict_off),
+            consecutive_required=not (parsed.separate_off_days or separate_off_in_preference(parsed, parsed.associates[a])),
+            name=f"joint_{a}", owed=getattr(parsed.associates[a], "off_days", None))
         model.Add(sum(y[a, s_index] for s_index in range(S)) <= parsed.max_different_shifts)
         objective_terms.append(25 * sum(y[a, s_index] for s_index in range(S)))
         for shift in parsed.shifts:
@@ -19733,10 +19967,12 @@ def shift_consistency_summary(parsed: ParsedInput, skeleton: SkeletonSolution) -
 
 def _consistency_cell_allowed(parsed: ParsedInput, a: int, d: int, shift: Shift) -> bool:
     assoc = parsed.associates[a]
+    if not shift_length_allows(assoc, shift):
+        return False
     if getattr(parsed, "demand_fit_guard_enabled", False) and demand_fit_blocked(parsed, d, shift)[0]:
         return False
     windows = associate_language_windows(parsed, assoc, day=d)
-    if windows and not any(shift_within_language_window(shift, w) for w in windows):
+    if windows and not any(language_window_allows(parsed, shift, w) for w in windows):
         return False
     if shift_overlaps_required_language_for_noneligible(parsed, assoc, shift, d) is not None:
         return False
@@ -20060,6 +20296,16 @@ def add_more_consistent_export(selection: Dict[str, Any], polished_pair: Tuple[A
     return True
 
 
+def add_preference_export(selection: Dict[str, Any], swapped_pair: Tuple[Any, Any], record: Mapping[str, Any]) -> bool:
+    """Publish an applied preference swap as PREFERENCE_CANDIDATE, beside the selected schedule (F-35: never in its place)."""
+    if record.get("status") != "APPLIED":
+        return False
+    if any(role == "PREFERENCE_CANDIDATE" for role, _ in selection["exports"]):
+        return False
+    selection["exports"].append(("PREFERENCE_CANDIDATE", swapped_pair))
+    return True
+
+
 def shift_consistency_polish(
     parsed: ParsedInput,
     skeleton: SkeletonSolution,
@@ -20198,6 +20444,238 @@ def shift_consistency_polish(
     record["status"] = "APPLIED"
     record["after"] = shift_consistency_summary(parsed, final_skeleton)
     return final_skeleton, polished, record
+
+
+PREFERENCE_SWAP_TIME_LIMIT_SEC = 20.0
+# Phase BP (owner, 2026-11-12: a preference may cost coverage "maybe 1-2% maximum"): how far each guarded coverage count of the
+# PREFERENCE_CANDIDATE may fall below the selected schedule's. Rule: evidence/phase_bp/PREFERENCE_ALLOWANCE_RULE.txt.
+PREFERENCE_COVERAGE_ALLOWANCE = 0.02
+
+
+def preference_allowance_cost(new: Mapping[str, Any], selected: Mapping[str, Any], allowance: float) -> Optional[Dict[str, float]]:
+    """What ``new`` costs against the ``selected`` schedule's metrics, or None when it is outside the allowance.
+
+    Each guarded higher-is-better coverage count may be lower by at most floor(allowance x the selected value). Every other guarded
+    measure stays no worse, except the overage measures when an allowance is given: a moved person is surplus where they land.
+    """
+    cost: Dict[str, float] = {}
+    for key in _consistency_metrics_no_worse(new, selected):
+        if key in SHIFT_CONSISTENCY_GUARD_HIGHER:
+            drop = float(selected.get(key, 0) or 0) - float(new.get(key, 0) or 0)
+            if drop > int(allowance * float(selected.get(key, 0) or 0)):
+                return None
+            cost[key] = drop
+        elif not (allowance > 0 and key in SHIFT_CONSISTENCY_GUARD_LOWER and "overage" in key):
+            return None
+    return cost
+
+
+def preference_distance(parsed: ParsedInput, a: int, d: int, shift_index: Optional[int]) -> int:
+    """Minutes between associate a's Preference shift on day d and the shift worked (0 when there is no shift Preference)."""
+    assoc = parsed.associates[a]
+    pref = assoc.preferences[d] if d < len(assoc.preferences) else ""
+    if shift_index is None or preference_kind(pref) != "shift":
+        return 0
+    parts = shift_parts(pref)
+    return circular_minute_distance(parts[0], parsed.shifts[shift_index].start_min) if parts else 0
+
+
+def preference_swap_polish(
+    parsed: ParsedInput,
+    skeleton: SkeletonSolution,
+    solution: BreakSolution,
+    time_limit_sec: float = PREFERENCE_SWAP_TIME_LIMIT_SEC,
+    allowance: float = PREFERENCE_COVERAGE_ALLOWANCE,
+) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
+    """Phase BE: same-day swaps between interchangeable associates that bring both closer to their Preference shift.
+
+    Rule: evidence/phase_be/REQUESTS.md. Returns the original objects with the reason when nothing is kept.
+
+    Phase BP: after the swaps, one associate's day may move to the asked shift: free moves first, then moves whose cumulative
+    coverage cost against the selected schedule stays inside ``allowance`` (evidence/phase_bp/PREFERENCE_ALLOWANCE_RULE.txt).
+    """
+    started = time.time()
+    deadline = started + float(time_limit_sec)
+    record: Dict[str, Any] = {"enabled": bool(parsed.use_preferences), "swaps": 0, "trials": 0, "stopped_by_time_limit": False,
+                              "moves": 0, "allowance": float(allowance), "coverage_cost": {}}
+
+    def unchanged(status: str) -> Tuple[SkeletonSolution, BreakSolution, Dict[str, Any]]:
+        record["status"] = status
+        record["elapsed_sec"] = round(time.time() - started, 3)
+        return skeleton, solution, record
+
+    if not parsed.use_preferences:
+        return unchanged("NO_CHANGE")
+    A = len(parsed.associates)
+    rows = [list(r) for r in skeleton.selected_shift_index]
+    pattern = dict(solution.selected_pattern)
+    no_break = set(solution.no_break_cells)
+    nested = {a for a, assoc in enumerate(parsed.associates) if norm(getattr(assoc, "nesting_group", ""))}
+    locked = {
+        (a, d) for a, assoc in enumerate(parsed.associates) for d in range(7)
+        if parsed.fixed_enabled and preference_kind(assoc.fixed_schedule[d] if d < len(assoc.fixed_schedule) else "") == "shift"
+    }
+    base_metrics = calculate_metrics(parsed, skeleton, solution.selected_pattern, solution.patterns)
+    current_metrics = base_metrics
+    employee_now = employee_operational_quality(parsed, skeleton)
+    record["matched_before"] = int(employee_now.get("preference_match_count", 0))
+    current_skeleton = skeleton
+    shifts = parsed.shifts
+
+    def movable(a: int, d: int) -> bool:
+        return rows[a][d] is not None and a not in nested and (a, d) not in locked
+
+    improved = True
+    while improved:
+        if time.time() >= deadline:
+            record["stopped_by_time_limit"] = True
+            break
+        improved = False
+        for d in range(7):
+            groups: Dict[Tuple[str, int], List[int]] = {}
+            for a in range(A):
+                if movable(a, d):
+                    groups.setdefault((norm(parsed.associates[a].language), shifts[rows[a][d]].duration_min), []).append(a)
+            for members in groups.values():
+                for i, a in enumerate(members):
+                    for b in members[i + 1:]:
+                        if rows[a][d] == rows[b][d]:
+                            continue
+                        if time.time() > deadline:
+                            record["stopped_by_time_limit"] = True
+                            continue
+                        before_a = preference_distance(parsed, a, d, rows[a][d])
+                        before_b = preference_distance(parsed, b, d, rows[b][d])
+                        after_a = preference_distance(parsed, a, d, rows[b][d])
+                        after_b = preference_distance(parsed, b, d, rows[a][d])
+                        if after_a > before_a or after_b > before_b or after_a + after_b >= before_a + before_b:
+                            continue
+                        ra, rb = list(rows[a]), list(rows[b])
+                        ra[d], rb[d] = rb[d], ra[d]
+                        if not (_consistency_row_allowed(parsed, a, ra) and _consistency_row_allowed(parsed, b, rb)
+                                and _consistency_cell_allowed(parsed, a, d, shifts[ra[d]])
+                                and _consistency_cell_allowed(parsed, b, d, shifts[rb[d]])):
+                            continue
+                        record["trials"] += 1
+                        trial = [list(r) for r in rows]
+                        trial[a], trial[b] = ra, rb
+                        trial_pattern = dict(pattern)
+                        trial_pattern[(a, d)], trial_pattern[(b, d)] = pattern.get((b, d)), pattern.get((a, d))
+                        trial_skeleton = _consistency_skeleton(parsed, skeleton, trial)
+                        employee = employee_operational_quality(parsed, trial_skeleton)
+                        if not _consistency_employee_no_worse(employee, employee_now):
+                            continue
+                        metrics = calculate_metrics(parsed, trial_skeleton, trial_pattern, solution.patterns)
+                        if _consistency_metrics_no_worse(metrics, base_metrics):
+                            continue
+                        flags = {(a, d): (b, d) in no_break, (b, d): (a, d) in no_break}
+                        for cell, flag in flags.items():
+                            no_break.discard(cell)
+                            if flag:
+                                no_break.add(cell)
+                        rows, pattern, employee_now = trial, trial_pattern, employee
+                        current_skeleton, current_metrics = trial_skeleton, metrics
+                        record["swaps"] += 1
+                        improved = True
+
+    # Phase BP: single moves to the asked shift (same length, so the person-day keeps its break pattern).
+    by_label = {norm(s.label): s.index for s in shifts}
+    refused: Dict[str, int] = record.setdefault("moves_refused_by", {})
+
+    def asked(a: int, d: int) -> Optional[int]:
+        assoc = parsed.associates[a]
+        pref = assoc.preferences[d] if d < len(assoc.preferences) else ""
+        if preference_kind(pref) != "shift" or not movable(a, d):
+            return None
+        target = by_label.get(norm(pref))
+        if target is None or target == rows[a][d] or shifts[target].duration_min != shifts[rows[a][d]].duration_min:
+            return None
+        return target
+
+    def moved(a: int, d: int, target: int) -> Optional[Tuple[Any, ...]]:
+        """The week with (a, d) on ``target``: (rows, skeleton, employee quality, metrics, cost), or None when a rule or the allowance refuses."""
+        row = list(rows[a])
+        row[d] = target
+        if not (_consistency_row_allowed(parsed, a, row) and _consistency_cell_allowed(parsed, a, d, shifts[target])):
+            refused["a row or cell rule"] = refused.get("a row or cell rule", 0) + 1
+            return None
+        record["trials"] += 1
+        trial = [list(r) for r in rows]
+        trial[a] = row
+        trial_skeleton = _consistency_skeleton(parsed, skeleton, trial)
+        employee = employee_operational_quality(parsed, trial_skeleton)
+        if not _consistency_employee_no_worse(employee, employee_now):
+            refused["employee quality"] = refused.get("employee quality", 0) + 1
+            return None
+        metrics = calculate_metrics(parsed, trial_skeleton, pattern, solution.patterns)
+        cost = preference_allowance_cost(metrics, base_metrics, allowance)
+        if cost is None:  # the audit says which measures refused a move, so "not given" can be explained
+            for key in _consistency_metrics_no_worse(metrics, base_metrics):
+                refused[key] = refused.get(key, 0) + 1
+            return None
+        return (trial, trial_skeleton, employee, metrics, cost)
+
+    def candidates() -> List[Tuple[int, int, int]]:
+        return [(a, d, t) for a in range(A) for d in range(7) for t in [asked(a, d)] if t is not None]
+
+    def keep(found: Tuple[Any, ...]) -> None:
+        nonlocal rows, current_skeleton, employee_now, current_metrics
+        rows, current_skeleton, employee_now, current_metrics = found[0], found[1], found[2], found[3]
+        record["moves"] += 1
+
+    for a, d, target in candidates():  # free moves: no guarded measure is worse
+        if time.time() >= deadline:
+            record["stopped_by_time_limit"] = True
+            break
+        found = moved(a, d, target)
+        if found is not None and not found[4] and not _consistency_metrics_no_worse(found[3], base_metrics):
+            keep(found)
+    if allowance > 0 and not record["stopped_by_time_limit"]:  # then inside the allowance, cheapest first
+        priced = []
+        for a, d, target in candidates():
+            if time.time() >= deadline:
+                record["stopped_by_time_limit"] = True
+                break
+            found = moved(a, d, target)
+            if found is not None:
+                priced.append((sum(found[4].values()), a, d, target))
+        for _, a, d, target in sorted(priced):
+            if time.time() >= deadline:
+                record["stopped_by_time_limit"] = True
+                break
+            found = moved(a, d, target)  # priced again on the week as it now stands: the allowance is cumulative
+            if found is not None:
+                keep(found)
+    if not (record["swaps"] or record["moves"]):
+        return unchanged("NO_CHANGE")
+    record["coverage_cost"] = {k: float(base_metrics.get(k, 0) or 0) - float(current_metrics.get(k, 0) or 0)
+                               for k in SHIFT_CONSISTENCY_GUARD_HIGHER
+                               if float(current_metrics.get(k, 0) or 0) < float(base_metrics.get(k, 0) or 0)}
+    final_skeleton = current_skeleton
+    final_skeleton.diagnostics["no_break_metrics"] = calculate_metrics(
+        parsed, final_skeleton, {(a, d): None for a, d, _ in scheduled_cells(final_skeleton)}, [])
+    final_skeleton.diagnostics["preference_swap_polish"] = True
+    diagnostics = {k: v for k, v in solution.diagnostics.items()
+                   if k not in {"release_validation", "hard_failure_types", "hard_fail_count", "early_release_validation"}}
+    diagnostics["preference_swap_polish"] = {"swaps": record["swaps"], "moves": record["moves"]}
+    swapped = BreakSolution(
+        profile=solution.profile, skeleton_profile=solution.skeleton_profile, cp_status=solution.cp_status,
+        elapsed_sec=solution.elapsed_sec, objective=solution.objective, pattern_width=solution.pattern_width,
+        exception_mode=solution.exception_mode, selected_pattern=pattern, no_break_cells=no_break,
+        patterns=list(solution.patterns), diagnostics=diagnostics, metrics=current_metrics,
+    )
+    validation = validate_schedule(parsed, final_skeleton, swapped)
+    original_validation = solution.diagnostics.get("release_validation") or validate_schedule(parsed, skeleton, solution)
+    if (candidate_pool_class(parsed, final_skeleton, swapped) != candidate_pool_class(parsed, skeleton, solution)
+            or int(validation.get("hard_fail_count", 1) or 0) > int(original_validation.get("hard_fail_count", 0) or 0)):
+        record["reason"] = "VALIDATION_OR_CLASS_CHANGED"
+        record["swaps_discarded"], record["swaps"] = record["swaps"], 0
+        record["moves_discarded"], record["moves"], record["coverage_cost"] = record["moves"], 0, {}
+        return unchanged("KEPT_ORIGINAL")
+    record["matched_after"] = int(employee_now.get("preference_match_count", 0))
+    record["status"] = "APPLIED"
+    record["elapsed_sec"] = round(time.time() - started, 3)
+    return final_skeleton, swapped, record
 
 
 def run_post_break_repair_phase(
@@ -24506,6 +24984,22 @@ def run_case(
                 best_before_skeleton.diagnostics.get("no_break_metrics", {}).get("before_target", 0)
             ),
         )
+        # Phase BE: same-day swaps toward each associate's Preference shift, published
+        # as PREFERENCE_CANDIDATE beside the selected schedule, which is not rewritten
+        # (F-35; owner, 2026-11-02). Only a pair whose guarded measures are no worse
+        # is kept (see evidence/phase_be/REQUESTS.md); the runner re-checks coverage
+        # with the independent validator before offering it.
+        swapped_sk, swapped_br, swap_record = preference_swap_polish(
+            parsed, *selection["recommended"],
+            time_limit_sec=max(1.0, min(PREFERENCE_SWAP_TIME_LIMIT_SEC,
+                                        budget_manager.remaining_total() - SHIFT_CONSISTENCY_TAIL_RESERVE_SEC - SHIFT_CONSISTENCY_MIN_SEC)))
+        swap_record["published_as"] = (
+            "PREFERENCE_CANDIDATE" if add_preference_export(selection, (swapped_sk, swapped_br), swap_record) else None)
+        audit["preference_swap_polish"] = swap_record
+        print(f"PREFERENCE_SWAP_POLISH {swap_record.get('status')}: {swap_record.get('swaps', 0)} swaps, {swap_record.get('moves', 0)} moves"
+              + (f", preference matches {swap_record['matched_before']} -> {swap_record['matched_after']}"
+                 f" (published as PREFERENCE_CANDIDATE; the selected schedule is unchanged)"
+                 if swap_record.get("status") == "APPLIED" else ""), file=log, flush=True)
         polish_on = (SHIFT_CONSISTENCY_CLI_OVERRIDE if SHIFT_CONSISTENCY_CLI_OVERRIDE is not None
                      else SHIFT_CONSISTENCY_POLISH_ENABLED if parsed.shift_consistency_polish is None
                      else bool(parsed.shift_consistency_polish))
@@ -24698,6 +25192,8 @@ def run_case(
             "BALANCED_CANDIDATE": output_path.with_name(prefix + "_BALANCED_CANDIDATE" + output_path.suffix),
             "MORE_CONSISTENT_CANDIDATE": output_path.with_name(
                 prefix + "_MORE_CONSISTENT_CANDIDATE" + output_path.suffix),
+            "PREFERENCE_CANDIDATE": output_path.with_name(
+                prefix + "_PREFERENCE_CANDIDATE" + output_path.suffix),
         }
         selection_basis = {
             "RECOMMENDED_FINAL": (
@@ -24711,6 +25207,11 @@ def run_case(
                 "The recommended schedule with a more uniform week per associate (same-day swaps between "
                 "interchangeable associates and one-hour moves kept only when no measured coverage, compliance "
                 "or fairness value gets worse); offered beside the recommended schedule, never in its place"
+            ),
+            "PREFERENCE_CANDIDATE": (
+                "The recommended schedule with same-day swaps between interchangeable associates that bring them "
+                "closer to their Preference shifts, kept only when no guarded coverage or fairness value gets worse; "
+                "offered beside the recommended schedule, never in its place"
             ),
         }
         export_records: List[Dict[str, Any]] = [{
@@ -24726,6 +25227,7 @@ def run_case(
                 "MAX_FLOOR_CANDIDATE": "MAX_FLOOR_CANDIDATE",
                 "BALANCED_CANDIDATE": "BALANCED_CANDIDATE",
                 "MORE_CONSISTENT_CANDIDATE": "MORE_CONSISTENT_CANDIDATE",
+                "PREFERENCE_CANDIDATE": "PREFERENCE_CANDIDATE",
             }[role]
             role_path = role_paths[role]
             info = write_output_workbook(
@@ -24864,6 +25366,8 @@ def run_case(
             "max_floor_candidate_output": str(role_paths["MAX_FLOOR_CANDIDATE"]) if "MAX_FLOOR_CANDIDATE" in output_info_by_role else "",
             "more_consistent_candidate_output": (
                 str(role_paths["MORE_CONSISTENT_CANDIDATE"]) if "MORE_CONSISTENT_CANDIDATE" in output_info_by_role else ""),
+            "preference_candidate_output": (
+                str(role_paths["PREFERENCE_CANDIDATE"]) if "PREFERENCE_CANDIDATE" in output_info_by_role else ""),
             "candidate_leaderboard_csv": str(leaderboard_csv), "pareto_manifest": str(pareto_manifest), "audit": str(audit_path),
             "interval_minutes": parsed.interval_minutes, "target_ratio": parsed.target_ratio,
             "minimum_after_break_target_ratio": (

@@ -1,0 +1,3 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{# Phase AY: hands the page's stamp and where to ask to static/app.js (liveWatch). mode: reload (read-only pages) or bar. #}
+{% macro watch(kind, mode, program='', on='') %}{% set live = live_state(kind, program, on) %}{% if live.url %}<div id="live" hidden data-url="{{ live.url }}" data-stamp="{{ live.stamp }}" data-mode="{{ mode }}"></div>{% endif %}{% endmacro %}

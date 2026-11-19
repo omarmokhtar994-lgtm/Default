@@ -1,0 +1,383 @@
+"""Joint-refinement solves run in a forked, memory-watched child process.
+
+CHAT_DEEP_9000 was killed by the kernel at 13 GB inside joint refinement: no
+schedule, no summary, no validation (evidence/DEEP_MODE_OOM.md). A replay of
+that phase showed the second joint model at 3.8 GB before the solve and past
+6.5 GB inside CP-SAT. The fix runs each joint solve in a fork of the engine:
+same model object, same parameters, same seed, so the answer is the one the
+engine would have computed in process; when the machine runs out of memory
+only the child dies, the solve reports UNKNOWN, and joint refinement stops
+starting new (larger) models.
+
+These tests pin: bit-identical results on a deterministic solve; the memory
+stop (watchdog, kernel kill, MemoryError) is survived and recorded; any other
+child failure is raised, not hidden; the in-process fallbacks; the child dies
+with its parent; the engine's joint solves use it.
+"""
+import inspect
+import os
+import signal
+import subprocess
+import sys
+import shutil
+import tempfile
+import textwrap
+import time
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+ROOT = Path(os.environ.get("CANDIDATE_ENGINE", REPO)).resolve()
+sys.path.insert(0, str(REPO / "tools"))
+import build_synthetic_suite as B  # noqa: E402
+
+ENGINE = ROOT / "engine" / "_tools" / "l632_universal_scheduler.py"
+E = B.load_engine(ENGINE)
+cp_model = E.import_cp_sat()
+from ortools.sat.python import cp_model_helper as CMH  # noqa: E402
+
+
+def small_model(seed=1, n=250):
+    import random
+    rnd = random.Random(seed)
+    m = cp_model.CpModel()
+    xs = [m.new_bool_var(f"x{i}") for i in range(n)]
+    for _ in range(n * 2):
+        a, b, c = rnd.sample(xs, 3)
+        m.add_bool_or([a, b.Not(), c])
+    m.add(sum(xs) <= n // 2)
+    m.maximize(sum(rnd.randint(1, 9) * x for x in xs))
+    return m, xs
+
+
+def deterministic(solver):
+    solver.parameters.max_time_in_seconds = 30
+    solver.parameters.max_deterministic_time = 0.5
+    solver.parameters.num_search_workers = 1
+    solver.parameters.random_seed = 7
+    return solver
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.saved = (E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, list(E._JOINT_SOLVE_MEMORY_STOPS),
+                      list(E._JOINT_SOLVE_ISOLATION_LOG))
+        del E._JOINT_SOLVE_MEMORY_STOPS[:]
+        del E._JOINT_SOLVE_ISOLATION_LOG[:]
+        # A private temp directory per test: the leftover-file check must see
+        # only this test's files. With the shared /tmp, two gates running at
+        # once (two package runners side by side) saw each other's in-flight
+        # joint_solve_* files and failed.
+        self.saved_tempdir = tempfile.tempdir
+        self.private_tmp = tempfile.mkdtemp(prefix="isolation_test_")
+        tempfile.tempdir = self.private_tmp
+
+    def tearDown(self):
+        E.JOINT_SOLVE_ISOLATION_ENABLED, E.JOINT_SOLVE_KILL_BELOW_FREE_MB, stops, log = self.saved
+        E._JOINT_SOLVE_MEMORY_STOPS[:] = stops
+        E._JOINT_SOLVE_ISOLATION_LOG[:] = log
+        tempfile.tempdir = self.saved_tempdir
+        shutil.rmtree(self.private_tmp, ignore_errors=True)
+
+    def assert_no_leftover_files(self):
+        left = {n for n in os.listdir(self.private_tmp) if n.startswith("joint_solve_")}
+        self.assertEqual(left, set())
+
+
+class SameAnswerAsInProcess(Base):
+    def test_bit_identical_on_a_deterministic_solve(self):
+        for seed in (1, 2):
+            m, xs = small_model(seed)
+            a = deterministic(cp_model.CpSolver())
+            sa = a.Solve(m)
+            b = deterministic(E.isolated_cp_solver(cp_model))
+            sb = b.Solve(m)
+            self.assertEqual(b.isolation_record["mode"], "ISOLATED")
+            self.assertEqual(b.isolation_record["child_exit"], 0)
+            self.assertIn(sa, (cp_model.OPTIMAL, cp_model.FEASIBLE))
+            self.assertEqual(sa, sb)
+            self.assertEqual(a.StatusName(sa), b.StatusName(sb))
+            self.assertEqual(a.ObjectiveValue(), b.ObjectiveValue())
+            self.assertEqual(a.BestObjectiveBound(), b.BestObjectiveBound())
+            self.assertEqual([a.Value(x) for x in xs], [b.Value(x) for x in xs])
+            self.assertEqual([a.BooleanValue(x) for x in xs], [b.BooleanValue(x) for x in xs])
+            self.assertEqual(a.Value(sum(xs)), b.Value(sum(xs)))
+            self.assertEqual((a.NumBranches(), a.NumConflicts()), (b.NumBranches(), b.NumConflicts()))
+            self.assertEqual(a.response_proto.deterministic_time, b.response_proto.deterministic_time)
+        self.assert_no_leftover_files()
+
+    def test_lexicographic_reuse_of_the_model_matches(self):
+        """The engine solves, locks the stage value into the model, then re-solves."""
+        results = []
+        for make in (cp_model.CpSolver, lambda: E.isolated_cp_solver(cp_model)):
+            m, xs = small_model(3)
+            s1 = deterministic(make())
+            s1.Solve(m)
+            m.add(sum(xs) >= int(s1.Value(sum(xs))))
+            m.minimize(sum(xs[::2]))
+            s2 = deterministic(make())
+            st = s2.Solve(m)
+            results.append((st, s2.ObjectiveValue(), [s2.Value(x) for x in xs]))
+        self.assertEqual(results[0], results[1])
+
+    def test_infeasible_is_reported_as_infeasible(self):
+        m = cp_model.CpModel()
+        x = m.new_int_var(0, 3, "x")
+        m.add(x >= 5)
+        s = E.isolated_cp_solver(cp_model)
+        status = s.Solve(m)
+        self.assertEqual(status, cp_model.INFEASIBLE)
+        self.assertEqual(s.StatusName(status), "INFEASIBLE")  # StatusName() without an argument is broken in OR-Tools 9.15 itself
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+
+
+class MemoryStop(Base):
+    def test_watchdog_stops_the_child_and_the_parent_carries_on(self):
+        E.JOINT_SOLVE_KILL_BELOW_FREE_MB = 10 ** 9  # every machine is "out of memory"
+        m, _ = small_model(4, n=600)
+        s = E.isolated_cp_solver(cp_model)
+        s.parameters.max_time_in_seconds = 60
+        started = time.time()
+        status = s.Solve(m)
+        self.assertLess(time.time() - started, 30)
+        self.assertEqual(status, cp_model.UNKNOWN)
+        self.assertEqual(s.StatusName(status), "UNKNOWN")
+        record = s.isolation_record
+        self.assertTrue(record["killed_for_memory"])
+        self.assertTrue(record["memory_stop"])
+        self.assertEqual(record["child_exit"], "SIGNAL_9")
+        self.assertEqual(len(E._JOINT_SOLVE_MEMORY_STOPS), 1)
+        headroom = E.joint_memory_headroom()
+        self.assertFalse(headroom["ok"])
+        self.assertEqual(headroom["source"], "JOINT_SOLVE_ISOLATION")
+        self.assert_no_leftover_files()
+
+    def fake(self, body):
+        s = E.isolated_cp_solver(cp_model)
+        return s, E.isolated_cp_solve(s, None, body, CMH.CpSolverResponse)
+
+    def test_a_kernel_oom_kill_of_the_child_is_a_memory_stop(self):
+        s, status = self.fake(lambda model, cb=None: os.kill(os.getpid(), signal.SIGKILL))
+        self.assertEqual(status, cp_model.UNKNOWN)
+        self.assertTrue(s.isolation_record["memory_stop"])
+        self.assertFalse(s.isolation_record["killed_for_memory"])
+        self.assertFalse(E.joint_memory_headroom()["ok"])
+
+    def test_bad_alloc_in_the_child_is_a_memory_stop(self):
+        def raise_memory_error(model, cb=None):
+            raise MemoryError("std::bad_alloc")
+        s, status = self.fake(raise_memory_error)
+        self.assertEqual(status, cp_model.UNKNOWN)
+        self.assertEqual(s.isolation_record["child_exit"], 71)
+        self.assertTrue(s.isolation_record["memory_stop"])
+
+    def test_the_child_prefers_itself_as_the_oom_victim(self):
+        E._child_prepare_for_isolated_solve  # exists
+        src = inspect.getsource(E._child_prepare_for_isolated_solve)
+        self.assertIn('"/proc/self/oom_score_adj"', src)
+        self.assertIn('write("1000")', src)
+        self.assertIn("gc.disable()", src)
+
+
+class Audit(Base):
+    def test_every_joint_solve_is_counted_in_the_audit(self):
+        m, _ = small_model(7)
+        deterministic(E.isolated_cp_solver(cp_model)).Solve(m)
+        E.JOINT_SOLVE_ISOLATION_ENABLED = False
+        deterministic(E.isolated_cp_solver(cp_model)).Solve(m)
+        E.JOINT_SOLVE_ISOLATION_ENABLED = True
+        E.JOINT_SOLVE_KILL_BELOW_FREE_MB = 10 ** 9
+        E.isolated_cp_solver(cp_model).Solve(small_model(8, n=600)[0])
+        audit = E.joint_solve_isolation_audit()
+        self.assertEqual(audit["solve_count"], 3)
+        self.assertEqual(audit["by_mode"], {"ISOLATED": 2, "IN_PROCESS_DISABLED": 1})
+        self.assertEqual(audit["child_exits"], {"0": 1, "SIGNAL_9": 1})
+        self.assertEqual(len(audit["memory_stops"]), 1)
+
+    def test_the_run_audit_carries_it(self):
+        src = inspect.getsource(E)
+        self.assertEqual(src.count('audit["joint_solve_isolation"] = joint_solve_isolation_audit()'), 2)
+
+
+class ErrorsAreNotHidden(Base):
+    def test_any_other_child_failure_is_raised_in_the_parent(self):
+        def broken(model, cb=None):
+            raise ValueError("model trouble 1234")
+        s = E.isolated_cp_solver(cp_model)
+        with self.assertRaises(RuntimeError) as ctx:
+            E.isolated_cp_solve(s, None, broken, CMH.CpSolverResponse)
+        self.assertIn("model trouble 1234", str(ctx.exception))
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+        self.assert_no_leftover_files()
+
+
+class DeadlineAndCrashAreNotHidden(Base):
+    """Audit F-06 / F-07 / F-12 (2026-09-28)."""
+
+    def setUp(self):
+        super().setUp()
+        self.saved_grace = E.JOINT_SOLVE_GRACE_SEC
+
+    def tearDown(self):
+        E.JOINT_SOLVE_GRACE_SEC = self.saved_grace
+        super().tearDown()
+
+    def test_a_hung_child_is_killed_at_its_deadline_not_waited_on_forever(self):
+        E.JOINT_SOLVE_GRACE_SEC = 1.0
+        s = E.isolated_cp_solver(cp_model)
+        s.parameters.max_time_in_seconds = 1.0
+        started = time.time()
+        status = E.isolated_cp_solve(s, None, lambda model, cb=None: time.sleep(120), CMH.CpSolverResponse)
+        self.assertLess(time.time() - started, 15)
+        self.assertEqual(status, cp_model.UNKNOWN)
+        self.assertTrue(s.isolation_record["killed_for_deadline"])
+        self.assertFalse(s.isolation_record["memory_stop"])  # a hang is not a memory stop
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+        self.assert_no_leftover_files()
+
+    def test_a_crashing_child_is_an_error_not_an_unknown(self):
+        s = E.isolated_cp_solver(cp_model)
+        with self.assertRaises(RuntimeError) as ctx:
+            E.isolated_cp_solve(s, None, lambda model, cb=None: os.kill(os.getpid(), signal.SIGSEGV),
+                                CMH.CpSolverResponse)
+        self.assertIn("SIGNAL_11", str(ctx.exception))
+        self.assertEqual(E._JOINT_SOLVE_MEMORY_STOPS, [])
+        self.assert_no_leftover_files()
+
+    def test_headroom_reads_the_cgroup_aware_free_memory(self):
+        saved = E.machine_free_memory_mb
+        try:
+            E.machine_free_memory_mb = lambda: (100, 64000)  # 100 MB free inside a small cgroup
+            self.assertFalse(E.joint_memory_headroom()["ok"])
+            E.machine_free_memory_mb = lambda: (40000, 64000)
+            self.assertTrue(E.joint_memory_headroom()["ok"])
+        finally:
+            E.machine_free_memory_mb = saved
+
+
+class InProcessFallbacks(Base):
+    def test_disabled_runs_in_process(self):
+        E.JOINT_SOLVE_ISOLATION_ENABLED = False
+        m, _ = small_model(5)
+        s = deterministic(E.isolated_cp_solver(cp_model))
+        self.assertIn(s.Solve(m), (cp_model.OPTIMAL, cp_model.FEASIBLE))
+        self.assertEqual((s.isolation_record["mode"], s.isolation_record["reason"]), ("IN_PROCESS", "DISABLED"))
+
+    def test_a_solution_callback_runs_in_process(self):
+        m, _ = small_model(6)
+        seen = []
+
+        class CB(cp_model.CpSolverSolutionCallback):
+            def on_solution_callback(self):
+                seen.append(self.ObjectiveValue())
+
+        s = deterministic(E.isolated_cp_solver(cp_model))
+        s.Solve(m, CB())
+        self.assertEqual(s.isolation_record["reason"], "CALLBACK_ATTACHED")
+        self.assertTrue(seen)
+
+
+class ChildDiesWithItsParent(Base):
+    def test_killing_the_engine_kills_its_solve(self, delay_before_arming=0.0):
+        script = textwrap.dedent(f"""
+            import sys, time
+            from pathlib import Path
+            sys.path.insert(0, {str(REPO / 'tools')!r})
+            import build_synthetic_suite as B
+            E = B.load_engine(Path({str(ENGINE)!r}))
+            cp_model = E.import_cp_sat()
+            from ortools.sat.python import cp_model_helper as CMH
+            s = E.isolated_cp_solver(cp_model)
+            if {delay_before_arming!r}:
+                prepare = E._child_prepare_for_isolated_solve
+                E._child_prepare_for_isolated_solve = lambda *a: (time.sleep({delay_before_arming!r}), prepare(*a))
+            E.isolated_cp_solve(s, None, lambda model, cb=None: time.sleep(120), CMH.CpSolverResponse)
+        """)
+        proc = subprocess.Popen([sys.executable, "-c", script])
+        try:
+            child = None
+            for _ in range(600):
+                for tid in os.listdir(f"/proc/{proc.pid}/task"):
+                    # A thread can exit between listdir and open (threads come
+                    # and go while the engine imports). Phase G: that race
+                    # crashed this test once under full-gate load before it
+                    # reached its assertion; a vanished thread has no children.
+                    try:
+                        kids = open(f"/proc/{proc.pid}/task/{tid}/children").read().split()
+                    except FileNotFoundError:
+                        continue
+                    if kids:
+                        child = int(kids[0])
+                if child:
+                    break
+                time.sleep(0.1)
+            self.assertIsNotNone(child, "isolated solve never forked")
+            proc.kill()
+            proc.wait()
+            def running(pid):
+                # Same race: the process can be reaped between a check and the read.
+                try:
+                    return open(f"/proc/{pid}/stat").read().split()[2] != "Z"
+                except FileNotFoundError:
+                    return False
+            for _ in range(50):
+                if not running(child):
+                    break
+                time.sleep(0.1)
+            alive = running(child)
+            self.assertFalse(alive, "orphaned solve still running")
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+
+
+    def test_a_parent_killed_before_the_signal_is_armed_leaves_no_orphan(self):
+        # Holds the child for 1 s before the death signal is armed, so the
+        # parent is always killed inside the fork-to-prctl window that caused
+        # the intermittent orphan above. The old order fails this every time.
+        self.test_killing_the_engine_kills_its_solve(delay_before_arming=1.0)
+
+    def test_a_child_whose_parent_is_already_gone_exits_at_once(self):
+        # The death signal only fires for a parent that dies after it is armed.
+        # A parent killed between fork() and prctl() left the solve orphaned
+        # (1 in about 40 side-by-side runs of the test above), so the child
+        # re-checks its parent once the signal is armed.
+        script = textwrap.dedent(f"""
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, {str(REPO / 'tools')!r})
+            import build_synthetic_suite as B
+            E = B.load_engine(Path({str(ENGINE)!r}))
+            E._child_prepare_for_isolated_solve(parent_pid=-1)
+            print("survived")
+        """)
+        done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 73, done.stdout + done.stderr)
+        self.assertNotIn("survived", done.stdout)
+
+
+class Wiring(unittest.TestCase):
+    def test_joint_refinement_solves_are_isolated(self):
+        src = inspect.getsource(E.solve_joint_shift_off_language_break_refinement)
+        self.assertIn("stage_solver = isolated_cp_solver(cp_model)", src)
+        self.assertNotIn("cp_model.CpSolver()", src)
+        self.assertIn("solve_isolation=list(solve_isolation_rows)", src)
+        self.assertTrue(E.JOINT_SOLVE_ISOLATION_ENABLED)
+
+    def test_parameters_reach_the_child_unchanged(self):
+        """configure_solver_limits and the stage settings are set on the parent
+        object; fork carries that object, so nothing is copied or re-derived."""
+        s = E.isolated_cp_solver(cp_model)
+        self.assertIsInstance(s, cp_model.CpSolver)
+        s.parameters.random_seed = 4242
+        s.parameters.num_search_workers = 3
+        self.assertEqual((s.parameters.random_seed, s.parameters.num_search_workers), (4242, 3))
+
+    def test_threshold(self):
+        self.assertEqual(E.joint_solve_kill_threshold_mb(16000), 320)
+        self.assertEqual(E.joint_solve_kill_threshold_mb(4000), E.JOINT_SOLVE_KILL_BELOW_FREE_MB)
+        self.assertEqual(E.joint_solve_kill_threshold_mb(None), E.JOINT_SOLVE_KILL_BELOW_FREE_MB)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

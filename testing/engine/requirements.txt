@@ -1,0 +1,5 @@
+ortools==9.15.6755
+openpyxl>=3.1.2
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.11.0

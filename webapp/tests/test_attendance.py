@@ -111,7 +111,10 @@ class TheAttendance(unittest.TestCase):
         self.assertEqual(advice["warnings"], ["Break 1 ends and Lunch starts 30 minutes apart; this program's "
                                               "minimum gap between breaks is 60 minutes.",
                                               "Lunch ends and Break 2 starts 270 minutes apart; this program's "
-                                              "normal maximum gap between breaks is 210 minutes."])
+                                              "normal maximum gap between breaks is 210 minutes.",
+                                              # Re-pinned (Phase AX, owner 2026-10-22: a manual move that takes a break out of
+                                              # the default says so): lunch 30 minutes after the first break is off the shape
+                                              "Lunch is normally 2 to 3 hours of work after the first break."])
         fits = advice["fits"]
         self.assertTrue(0 < len(fits) <= 3)
         for fit in fits:  # Lunch between Break 1 and Break 2, within the 60 to 210 minute gaps
@@ -146,17 +149,21 @@ class TheAttendance(unittest.TestCase):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Coaching", "15:30", "16:30", self.sara)
         with self.assertRaises(ValueError):  # overtime must touch the shift
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "22:00", "23:00", self.sara)
-        with self.assertRaises(ValueError):  # at most 2 hours
-            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "23:30", self.sara)
-        with self.assertRaises(ValueError):  # Tuesday 14:00 - 23:00: in at 09:00 leaves 10 hours' rest
-            self.days.add_activity("AE/AR B2B", WED, "Associate 013", "Overtime", "09:00", "11:00", self.sara)
-        with self.assertRaises(ValueError):  # Thursday 05:00 - 14:00: staying to 19:00 leaves 10 hours' rest
-            self.days.add_activity("AE/AR B2B", WED, "Associate 008", "Overtime", "17:00", "19:00", self.sara)
+        # re-pinned in Phase AJ: the owner raised the overtime cap from 2 to 4 hours (2026-10-15)
+        with self.assertRaises(ValueError):  # at most 4 hours
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara)
+        # re-pinned in Phase AJ: overtime breaking the rest gap is kept with a warning (owner, 2026-10-15)
+        for name, start, end in (("Associate 013", "09:00", "11:00"),  # Tuesday 14:00 - 23:00: 10 hours' rest
+                                 ("Associate 008", "17:00", "19:00")):  # Thursday 05:00 - 14:00: 10 hours' rest
+            self.assertIn("would rest 10 hours", self.days.add_activity("AE/AR B2B", WED, name, "Overtime", start, end,
+                                                                        self.sara, dry_run=True)["warning"])
         with self.assertRaises(ValueError):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Lunch party", "15:00", "16:00", self.sara)
         self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "22:00", self.sara)
-        self.days.add_activity("AE/AR B2B", WED, "Associate 001", "VTO", "20:00", "21:00", self.sara)
-        self.assertEqual([a[0] for a in self.acts("Associate 001")], ["Training", "VTO", "Overtime"])
+        # re-pinned (Phase AY, owner: "remove VTO option"): a VTO can no longer be booked; the other activities are listed as before
+        with self.assertRaises(ValueError):
+            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "VTO", "20:00", "21:00", self.sara)
+        self.assertEqual([a[0] for a in self.acts("Associate 001")], ["Training", "Overtime"])
 
     def test_booking_a_meeting_is_all_or_nothing(self):
         slot = self.days.meeting_slots("AE/AR B2B", WED, ["Associate 001", "Associate 013"], 30, "13:00", "19:00")[0]
@@ -188,37 +195,44 @@ class TheAttendance(unittest.TestCase):
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Called in", "12:00", "21:00", self.sara)
         with self.assertRaises(ValueError):  # not a Shift Library shift, and typed times go in 15-minute steps
             self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:05", "21:05", self.sara)
-        with self.assertRaises(ValueError):  # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00
-            self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara)
+        # re-pinned (owner, 2026-10-23: a manual change shows a warning and is kept, never refused; see test_ay_callin_rest):
+        # Tuesday 23:00 - 08:00 leaves 1 hour's rest before 09:00, which is said, not refused
+        warned = self.days.add_activity("AE/AR B2B", WED, "Associate 004", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 1 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "12:00", "21:00", self.sara)
         with self.assertRaises(ValueError):  # once a day
             self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "09:00", "18:00", self.sara)
 
     def test_the_rest_gap_reaches_across_the_week_and_what_was_added(self):
         # Sunday: no schedule is kept for the week before, so the previous Saturday comes from the input
-        with self.assertRaises(ValueError) as refused:  # Associate 001: Saturday 16:00 - 01:00
-            self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara)
-        self.assertIn("would rest 8 hours after the previous shift", str(refused.exception))
+        # Associate 001: Saturday 16:00 - 01:00. Re-pinned (owner, 2026-10-23): a call-in that breaks the rest gap is kept with a
+        # warning, as overtime is (Phase AJ), so the warning is what is checked here
+        warned = self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 8 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", SUN, "Associate 001", "Called in", "13:00", "22:00", self.sara)
-        with self.assertRaises(ValueError) as refused:  # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
-            self.days.add_activity("AE/AR B2B", SUN, "Associate 010", "Overtime", "14:00", "16:00", self.sara)
-        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        # Re-pinned in Phase AJ: the owner asked that overtime breaking the rest gap is kept with a warning
+        # Associate 010: Saturday 18:00 - 03:00, Sunday from 16:00
+        warned = self.days.add_activity("AE/AR B2B", SUN, "Associate 010", "Overtime", "14:00", "16:00", self.sara,
+                                        dry_run=True)["warning"]
+        self.assertIn("would rest 11 hours after the previous shift", warned)
         # a call-in is a shift for the days either side: Associate 002 is off Wednesday and Thursday
         self.days.add_activity("AE/AR B2B", WED, "Associate 002", "Called in", "15:00", "00:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", THU, "Associate 002", "Called in", "09:00", "18:00", self.sara)
-        self.assertIn("would rest 9 hours after the previous shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", THU, "Associate 002", "Called in", "09:00", "18:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned (owner, 2026-10-23): said, not refused
+        self.assertIn("would rest 9 hours after the previous shift", warned)
         # and overtime lengthens the shift: Associate 003 works Monday 09:00 - 18:00, off on Tuesday
         self.days.add_activity("AE/AR B2B", MON, "Associate 003", "Overtime", "18:00", "20:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "07:00", "16:00", self.sara)
-        self.assertIn("would rest 11 hours after the previous shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "07:00", "16:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned (owner, 2026-10-23): said, not refused
+        self.assertIn("would rest 11 hours after the previous shift", warned)
         self.days.add_activity("AE/AR B2B", TUE, "Associate 003", "Called in", "08:00", "17:00", self.sara)
         # the other way: Associate 018 (Monday 09:00 - 18:00, off Tuesday) called in at 06:00 has exactly 12 hours
         self.days.add_activity("AE/AR B2B", TUE, "Associate 018", "Called in", "06:00", "15:00", self.sara)
-        with self.assertRaises(ValueError) as refused:
-            self.days.add_activity("AE/AR B2B", MON, "Associate 018", "Overtime", "18:00", "19:00", self.sara)
-        self.assertIn("would rest 11 hours before the next shift", str(refused.exception))
+        warned = self.days.add_activity("AE/AR B2B", MON, "Associate 018", "Overtime", "18:00", "19:00", self.sara,
+                                        dry_run=True)["warning"]  # re-pinned in Phase AJ: kept with a warning
+        self.assertIn("would rest 11 hours before the next shift", warned)
 
     def test_board_offers_keep_the_rest_gap_across_the_week(self):
         page = self.days.page("AE/AR B2B", SUN)
@@ -423,11 +437,11 @@ class TheAddDialog(unittest.TestCase):
         self.days.add_item("AE/AR B2B", WED, "Associate 002", "Day off cancelled", "12:00", 0, self.sara, end="21:00")
         self.assertNotIn("Associate 002", [name for name, _ in self.days.off_today("AE/AR B2B", WED)])
 
-    def test_vto_any_stretch_inside_the_shift(self):
-        got = self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)
-        self.assertEqual(got["text"], "VTO 14:00 to 15:00")
-        with self.assertRaises(ValueError):  # before the shift
-            self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "06:00", 60, self.sara)
+    def test_vto_is_no_longer_offered(self):
+        # re-pinned (Phase AY, owner: "remove VTO option"): it was any stretch inside the shift; now it is refused wherever it is asked for
+        with self.assertRaises(ValueError) as said:
+            self.days.add_item("AE/AR B2B", WED, "Associate 001", "VTO", "14:00", 60, self.sara)
+        self.assertIn("no longer offered", str(said.exception))
 
     def test_added_break_cannot_overlap_a_planned_break(self):
         planned = self.seg()["breaks"][0]

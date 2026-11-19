@@ -1,0 +1,107 @@
+{
+ "small_10": {
+  "fair+tick": {
+   "spread": 8.25,
+   "worst": 2.25,
+   "short": 10.0,
+   "moves_pp": 2.1,
+   "stretches_pp": 0.62,
+   "slowest": 25.1,
+   "problems": 6,
+   "mid_pp": 1.12,
+   "at_breaks_pp": 0.98,
+   "avg_stretch_h": 2.58,
+   "longest_h": 3.84
+  }
+ },
+ "base_16": {
+  "fair+tick": {
+   "spread": 23.75,
+   "worst": 6.75,
+   "short": 0.0,
+   "moves_pp": 2.4,
+   "stretches_pp": 0.8,
+   "slowest": 25.7,
+   "problems": 0,
+   "mid_pp": 1.21,
+   "at_breaks_pp": 1.19,
+   "avg_stretch_h": 2.35,
+   "longest_h": 3.68
+  }
+ },
+ "large_30": {
+  "fair+tick": {
+   "spread": 21.5,
+   "worst": 3.75,
+   "short": 0.0,
+   "moves_pp": 2.21,
+   "stretches_pp": 0.81,
+   "slowest": 28.1,
+   "problems": 7,
+   "mid_pp": 1.38,
+   "at_breaks_pp": 0.83,
+   "avg_stretch_h": 2.49,
+   "longest_h": 4.34
+  }
+ },
+ "specialists_20": {
+  "fair+tick": {
+   "spread": 8.5,
+   "worst": 1.75,
+   "short": 10.0,
+   "moves_pp": 0.91,
+   "stretches_pp": 0.22,
+   "slowest": 25.7,
+   "problems": 0,
+   "mid_pp": 0.46,
+   "at_breaks_pp": 0.45,
+   "avg_stretch_h": 4.19,
+   "longest_h": 6.02
+  }
+ },
+ "tight_16": {
+  "fair+tick": {
+   "spread": 11.0,
+   "worst": 3.5,
+   "short": 57.0,
+   "moves_pp": 2.04,
+   "stretches_pp": 0.64,
+   "slowest": 26.0,
+   "problems": 3,
+   "mid_pp": 1.04,
+   "at_breaks_pp": 1.0,
+   "avg_stretch_h": 2.63,
+   "longest_h": 4.59
+  }
+ },
+ "slack_16": {
+  "fair+tick": {
+   "spread": 7.5,
+   "worst": 1.75,
+   "short": 0.0,
+   "moves_pp": 1.82,
+   "stretches_pp": 0.38,
+   "slowest": 26.1,
+   "problems": 0,
+   "mid_pp": 0.81,
+   "at_breaks_pp": 1.01,
+   "avg_stretch_h": 2.83,
+   "longest_h": 3.85
+  }
+ },
+ "no_languages_16": {
+  "fair+tick": {
+   "spread": 21.25,
+   "worst": 5.5,
+   "short": 0.0,
+   "moves_pp": 1.9,
+   "stretches_pp": 0.51,
+   "slowest": 26.0,
+   "problems": 0,
+   "mid_pp": 1.04,
+   "at_breaks_pp": 0.86,
+   "avg_stretch_h": 2.76,
+   "longest_h": 4.38
+  }
+ }
+}

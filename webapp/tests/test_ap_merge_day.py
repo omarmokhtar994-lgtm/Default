@@ -120,8 +120,10 @@ class TheMergedDayPage(_TwoLobs):
         page = self.text()
         self.assertIn("Associate 027", page)
         self.assertIn("Associate B027", page)
-        self.assertIn('Associate B027</a></b><span class="tl-tag lob">Tier 2</span>', page)
-        self.assertIn('Associate 027</a></b><span class="tl-tag lob">Tier 1</span>', page)
+        # Re-pinned 2026-11-23 (Phases BX/BZ, owner: the team manager in small text beside each associate, from the schedule's TL column):
+        # the name may now carry that line before the LOB tag; the LOB tag still follows each person's name.
+        self.assertRegex(page, r'Associate B027</a>(<small class="tl-tm">[^<]*</small>)?</b><span class="tl-tag lob">Tier 2</span>')
+        self.assertRegex(page, r'Associate 027</a>(<small class="tl-tm">[^<]*</small>)?</b><span class="tl-tag lob">Tier 1</span>')
 
     def test_the_other_tabs_send_you_back_to_the_timeline_with_a_word_about_it(self):
         got = self.get(view="channels")

@@ -654,6 +654,10 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - `deploy/setup_timers.sh` puts both in place; `install.sh` and `update.sh` call it. `deploy/disk_alert_setup.md` (the note `disk_alert.py` always
   pointed to, which did not exist) says how to check, restore and name the group. Tests: `test_bt_backup_timers.py`.
 
+## Installed (2026-11-23): patch BW_BX_DAYSOFF_TEAMS
+Patch sha256 `c2ab138e5f4ff12d8c31ad4cc690d20674b9536b15e5cf04ac1e80904f158b0d` (from c9e1dad, `--after` BT, BU and BV) applied with `apply_patch.sh` at
+17:56 server time: 27 files matched, SEALED, the website answered. Backup of the replaced files: `/opt/scheduler/patch-backups/BW_BX_DAYSOFF_TEAMS-20261123-175642`.
+
 ## Installed (2026-11-23): patch BV_OVERTIME_ANY_LENGTH
 Patch sha256 `0453d5197ec26d7b00496b156c44ce05fff62740d2379724d6e782ec29c158f5` (from 46b6eef, `--after` BT and BU) applied with `apply_patch.sh` at 17:22
 server time: 23 files matched, SEALED, the website answered. Backup of the replaced files: `/opt/scheduler/patch-backups/BV_OVERTIME_ANY_LENGTH-20261123-172249`.

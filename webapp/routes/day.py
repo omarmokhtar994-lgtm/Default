@@ -21,7 +21,7 @@ from ..channel_page import NAMES as CHANNEL_NAMES
 from ..clock import EGYPT, HOME, ZONES, minute_now, moved_text, noon_gap, pick_zone, rta_window_shift, shift as zone_shift, shown, to_schedule
 from ..contacts import ContactBook, pick_contact
 from ..daily_views import people_of, workbook as daily_workbook
-from ..day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, at_target, board, glance, hover_tips, now_panel, shift_groups, wall_extra, window_view
+from ..day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, at_target, board, glance, hover_tips, now_panel, shift_groups, team_groups, wall_extra, window_view
 from ..handover import note as handover_note
 from ..merged_day import merged_page
 from ..notify import SERVICES, leave_out
@@ -324,7 +324,7 @@ def register(app, ctx) -> None:
                     finder["error"] = str(exc)
         clock_now = A.datetime.now(ZoneInfo(own_zone))
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
-        shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None}
+        shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None, "tm_groups": [], "tm": "", "tm_label": "", "team": {}}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
             wanted = request.args.get("shift", "").strip()
             wanted = wanted if wanted == "earlier" or re.match(r"^([01]\d|2[0-3]):[0-5]\d$", wanted) else ""
@@ -332,6 +332,17 @@ def register(app, ctx) -> None:
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
+            # Phase BX: the team manager filter, beside the shift starts; both together show the people in both
+            team = days.team_of(program)
+            tms = team_groups(page["view"], team)
+            tm = request.args.get("tm", "").strip()
+            picked = next((x for x in tms if x["key"] == tm), None)
+            tm = picked["key"] if picked else ""
+            names = shift_view["shift_names"]
+            if picked:
+                names = set(picked["names"]) if names is None else names & set(picked["names"])
+            shift_view.update({"tm_groups": tms, "tm": tm, "tm_label": picked["label"] if picked else "", "shift_names": names,
+                               "team": {n: x["name"] for n, x in team.items()}})
         outside: Dict[str, Any] = {"rows": [], "prev": [], "roles": COVER_ROLES, "channels": [], "languages": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)

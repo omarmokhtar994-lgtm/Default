@@ -1726,6 +1726,32 @@ def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[D
     return out
 
 
+def team_groups(view: Dict[str, Any], team: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Phase BX: the Timeline's filter by team manager, like ``shift_groups``: the day's people grouped by the team manager on their account
+    (``team``: name -> {"id", "name"}), by name, then "No team manager" (key "none"), each with its names and how many are late or left early,
+    off for the shift and in aux. Empty when nobody on the page has a team manager."""
+    groups: Dict[str, Dict[str, Any]] = {}
+    for lane in view["lanes"]:
+        own = [s for s in lane["segments"] if s["offset"] == 0]
+        seg = own[0] if own else lane["segments"][0]
+        tm = team.get(lane["name"])
+        key = str(tm["id"]) if tm else "none"
+        group = groups.setdefault(key, {"key": key, "label": tm["name"] if tm else "No team manager", "people": 0, "late": 0, "off": 0,
+                                        "aux": 0, "names": []})
+        group["people"] += 1
+        group["names"].append(lane["name"])
+        status = seg["status"]
+        if status in ABSENT:
+            group["off"] += 1
+        elif status in LATE_EARLY:
+            group["late"] += 1
+        elif status in AUX:
+            group["aux"] += 1
+    if list(groups) in ([], ["none"]):
+        return []
+    return sorted(groups.values(), key=lambda g: (g["key"] == "none", g["label"].casefold()))
+
+
 CUSHION = 10  # person-minutes over the target an interval needs not to be tight (owner, 2026-10-15)
 
 

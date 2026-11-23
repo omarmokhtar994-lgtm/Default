@@ -2593,6 +2593,7 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
 AA_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_aa" / "screens"
 BV_SCREENS = REPO / "evidence" / "phase_bv" / "screens"
 BW_SCREENS = REPO / "evidence" / "phase_bw" / "screens"
+BX_SCREENS = REPO / "evidence" / "phase_bx" / "screens"
 
 
 class ThePhaseAAInTheBrowser(unittest.TestCase):
@@ -2722,6 +2723,41 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
         expect(page.locator("p.flash").first).to_contain_text(f"Recorded: {who}, Day off cancelled")
         expect(page.locator("table.adh-t tbody th", has_text=who)).to_have_count(0)
         self.assertEqual(errors, [])
+
+    def test_phase_bx_team_manager_filter(self):
+        from webapp.programs import ProgramBook
+        # Phase BX (owner, 2026-11-23): a filter by team manager under the shift starts, and the team manager in small text beside each name
+        store = self.store
+        pid = ProgramBook(store).unit(self.key)["program"]["id"]
+        lanes = [l["name"] for l in self.app.extensions["days"].page(self.key, self.wed)["view"]["lanes"]]
+        if not any(u["username"] == "bx_tm01" for u in store.list_users()):
+            for k, (tm_name, names) in enumerate((("Team Manager 01", lanes[:4]), ("Team Manager 02", lanes[4:7]))):
+                tm = store.add_user(f"bx_tm0{k + 1}", tm_name, "Made-up-pass-123", must_change=False)
+                store.update_user(tm, is_team_manager=1)
+                store.set_user_programs(tm, [pid])
+                for i, name in enumerate(names):
+                    uid = store.add_user(f"bx_a{k}{i}", name, "Made-up-pass-123", must_change=False)
+                    store.update_user(uid, is_associate=1, roster_name=name, team_manager_id=tm)
+                    store.set_user_programs(uid, [pid])
+        BX_SCREENS.mkdir(parents=True, exist_ok=True)
+        for width, name in ((1440, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=1100)
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(page)
+            self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}", errors)
+            bar = page.get_by_role("group", name="Filter by team manager")
+            expect(bar.get_by_role("link", name="Team Manager 01")).to_be_visible()
+            expect(page.locator(".tl-who .tl-tm", has_text="Team Manager 02").first).to_be_visible()
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth - window.innerWidth"), 1, name)
+            page.locator("#floor-h").scroll_into_view_if_needed()
+            page.screenshot(path=str(BX_SCREENS / f"team_filter_{name}.png"))
+            page.locator(".tl-scroll").screenshot(path=str(BX_SCREENS / f"team_rows_{name}.png"))
+            bar.get_by_role("link", name="Team Manager 01").click()
+            page.wait_for_load_state("load")
+            expect(page.locator(".tl-lane .tl-who")).to_have_count(4)
+            expect(page.get_by_role("group", name="Filter by team manager").get_by_role("link", name="Team Manager 01")).to_have_attribute("aria-current", "true")
+            self.assertEqual(errors, [])
 
     def test_phase_aa_screens(self):
         page = self.page(width=1440, height=900)

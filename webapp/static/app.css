@@ -1971,3 +1971,7 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
   .do-form label:has(input[type=time]) { flex: 1 1 calc(50% - 6px); }  /* from and to side by side */
   .do-form select, .do-form input[type=time] { width: 100%; min-width: 0; }
 }
+
+/* Phase BX: the team manager beside an associate, small, for reference and Ctrl+F */
+.tl-tm { display: block; font-size: 0.6875rem; font-weight: 400; line-height: 1.15; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-day] .tl-who b:has(.tl-tm) { display: flex; flex-direction: column; line-height: 1.15; }  /* under the name, in the same cell: the name keeps its width */

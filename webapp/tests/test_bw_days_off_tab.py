@@ -50,7 +50,8 @@ class TheTab(_Overtime):
 
     def test_the_day_before_and_after_are_shown(self):
         row = self.days.days_off_panel(self.key, WED)["off"][0]
-        self.assertEqual(set(row), {"name", "language", "before", "after"})
+        # "tm" added in Phase BX (owner, 2026-11-23: the team manager beside each associate)
+        self.assertEqual(set(row), {"name", "language", "before", "after", "tm"})
 
     def test_cancelling_on_a_library_shift_calls_them_in_and_takes_them_off_the_list(self):
         name = self.off[0][0]

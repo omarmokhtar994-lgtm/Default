@@ -1581,6 +1581,19 @@ class DayBook:
         return sorted((a["name"], a.get("language", "")) for a in self._week(row).get("associates", [])
                       if a["days"][day_index(on)].strip().casefold() == "off" and a["name"] not in called)
 
+    def team_of(self, program: str) -> Dict[str, Dict[str, Any]]:
+        """Phase BX: roster name -> its team manager ({"id", "name"}), for the associates of ``program`` whose account has one. The account is
+        found as swaps find it (an active associate account with that roster name that can open the program); the team manager must be active."""
+        from .access import Access  # here, not at the top: access is built on this module's neighbours
+        from .approvals import team_manager_of
+        found: Dict[str, Dict[str, Any]] = {}
+        for user in self.store.list_users():
+            if user["is_associate"] and user["active"] and user["roster_name"] and Access(self.store, user).can_open(program):
+                manager = team_manager_of(self.store, user["id"])
+                if manager:
+                    found[user["roster_name"]] = {"id": manager["id"], "name": manager["display_name"]}
+        return found
+
     def days_off_panel(self, program: str, on: date) -> Dict[str, Any]:
         """Phase BW: the RTA's Days off tab. Everyone off on ``on`` and not called in yet, with their working span the day before and after
         (None when off or unknown), the people already called in that day, and the Shift Library to pick from."""
@@ -1588,8 +1601,9 @@ class DayBook:
         if row is None:
             return {"off": [], "called": [], "shifts": []}
         near = self.neighbours(program, on, row)
-        off = [{"name": name, "language": lang, "before": near["prev"].get(name), "after": near["next"].get(name)}
-               for name, lang in self.off_today(program, on)]
+        team = self.team_of(program)  # Phase BX: the team manager beside the name
+        off = [{"name": name, "language": lang, "before": near["prev"].get(name), "after": near["next"].get(name),
+                "tm": team.get(name, {}).get("name", "")} for name, lang in self.off_today(program, on)]
         called = sorted((r["associate"], r["start"], r["end_min"]) for r in self.store.list_activities(program, [on.isoformat()])
                         if r["kind"] == CALLED_IN)
         return {"off": off, "called": called, "shifts": self.shift_library(program, on), "next_known": near["next_known"]}

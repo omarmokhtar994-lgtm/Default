@@ -612,6 +612,15 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BX (owner, 2026-11-23): filter by team manager, and the team manager beside each name
+- "Add a small filter same as the one per shift start with team manager, and add team manager name next to associates in smaller text just for reference
+  and easier search." `DayBook.team_of(program)`: roster name -> the team manager on the associate's account (an active associate account with that
+  roster name that can open the program, as `SwapBook.account` finds it; an active team manager, `approvals.team_manager_of`). `day.team_groups` groups
+  the Timeline's people like `shift_groups`, then "No team manager" (`tm=none`); `tm=<user id>` filters, and with `shift=` shows the people in both;
+  each bar's links keep the other filter. No bar when nobody has a team manager.
+- The name sits under the associate's name in small text (`.tl-tm`) on the Timeline and the Days off tab. Tests: `test_bx_team_manager_filter.py`,
+  `ThePhaseAAInTheBrowser.test_phase_bx_team_manager_filter` (screens `evidence/phase_bx/screens/`).
+
 ## Phase BW (owner, 2026-11-23): the RTA's Days off tab
 - "Add a tab in RTA for all available off days for that day in order to cancel any of them if needed." `view=daysoff` (one LOB; hidden when LOBs are
   merged) lists `DayBook.days_off_panel`: everyone off and not called in, their span the day before and after (`neighbours`), who is already called in,

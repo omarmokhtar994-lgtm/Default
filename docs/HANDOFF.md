@@ -637,6 +637,10 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - `deploy/setup_timers.sh` puts both in place; `install.sh` and `update.sh` call it. `deploy/disk_alert_setup.md` (the note `disk_alert.py` always
   pointed to, which did not exist) says how to check, restore and name the group. Tests: `test_bt_backup_timers.py`.
 
+## Installed (2026-11-23): patch BV_OVERTIME_ANY_LENGTH
+Patch sha256 `0453d5197ec26d7b00496b156c44ce05fff62740d2379724d6e782ec29c158f5` (from 46b6eef, `--after` BT and BU) applied with `apply_patch.sh` at 17:22
+server time: 23 files matched, SEALED, the website answered. Backup of the replaced files: `/opt/scheduler/patch-backups/BV_OVERTIME_ANY_LENGTH-20261123-172249`.
+
 ## Installed (2026-11-19, evening): patch BU_EMAIL_ALERT (BT and BU together)
 Patch sha256 `bcf1af3ed3f5854a9a34bd49f7225430d926a465f80c0787d61cda5b64d2e75c` (from 56b61b7, made against the installed package with
 `--after BT_BACKUP_ALERT.zip`) applied with `apply_patch.sh`, then `setup_timers.sh`. The owner set `ALERT_EMAIL`/`SMTP_USER` in

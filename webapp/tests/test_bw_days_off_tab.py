@@ -40,7 +40,8 @@ class TheTab(_Overtime):
         page = self.page()
         self.assertIn(f"{len(self.off)} people off on Wednesday 14 Oct", page)
         for name, _ in self.off:
-            row = re.search(rf'(?s)<tr[^>]*>\s*<th scope="row">{name}</th>.*?</tr>', page)
+            # the team manager under the name since Phase BX/BZ (this made-up schedule's TL column is "Team Lead 001")
+            row = re.search(rf'(?s)<tr[^>]*>\s*<th scope="row">{name}<small class="tl-tm">Team Lead 001</small></th>.*?</tr>', page)
             self.assertIsNotNone(row, name)
             self.assertIn('name="what" value="Day off cancelled"', row.group(0))
             self.assertIn(f'name="associate" value="{name}"', row.group(0))
@@ -61,7 +62,7 @@ class TheTab(_Overtime):
         self.assertEqual([(r["start"], r["end_min"]) for r in self.store.list_activities(self.key, [WED.isoformat()])
                           if r["associate"] == name and r["kind"] == CALLED_IN], [(lo, hi)])
         after = self.page()
-        self.assertNotRegex(after, rf'<th scope="row">{name}</th>')
+        self.assertNotRegex(after, rf'<th scope="row">{name}<')
         self.assertIn(f"{len(self.off) - 1} people off", after)
         self.assertRegex(after, rf"(?s)Already called in.*{name}")
 

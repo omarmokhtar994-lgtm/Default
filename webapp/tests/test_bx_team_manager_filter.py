@@ -61,7 +61,9 @@ class TheTeams(_Teams):
         page = self.timeline()
         for name in self.team1[:3]:
             self.assertRegex(page, rf'(?s)<b title="{name}"><a [^>]*>{name}</a><small class="tl-tm">Team Manager 01</small></b>')
-        self.assertNotRegex(page, rf'(?s)<b title="{self.working[6]}">.{{0,400}}?class="tl-tm"')
+        # Re-pinned in Phase BZ (owner, 2026-11-23: "Why not taken from the schedule uploaded already?"): the Schedule tab's TL column now gives
+        # everyone else a team manager; this made-up schedule's TL is "Team Lead 001" for everyone, so nobody is left with no team manager.
+        self.assertRegex(page, rf'(?s)<b title="{self.working[6]}"><a [^>]*>{self.working[6]}</a><small class="tl-tm">Team Lead 001</small></b>')
 
     def test_the_filter_lists_each_team_manager_and_nobody(self):
         page = self.timeline()
@@ -69,11 +71,16 @@ class TheTeams(_Teams):
         self.assertIn("<b>All team managers</b>", bar)
         self.assertRegex(bar, rf"<b>Team Manager 01</b><small>3 people")
         self.assertRegex(bar, rf"<b>Team Manager 02</b><small>2 people")
-        self.assertRegex(bar, rf"<b>No team manager</b><small>{len(self.working) - 5} people")
+        # Re-pinned in Phase BZ (owner, 2026-11-23: "Why not taken from the schedule uploaded already?"): the Schedule tab's TL column now gives
+        # everyone else a team manager; this made-up schedule's TL is "Team Lead 001" for everyone, so nobody is left with no team manager.
+        self.assertRegex(bar, rf"<b>Team Lead 001</b><small>{len(self.working) - 5} people")
+        self.assertNotIn("No team manager", bar)
 
     def test_picking_a_team_manager_shows_only_their_people(self):
         self.assertEqual(self.lanes(self.timeline(tm=self.tm1)), self.team1[:3])
-        self.assertEqual(set(self.lanes(self.timeline(tm="none"))), set(self.working[5:]))
+        # Re-pinned in Phase BZ (owner, 2026-11-23: "Why not taken from the schedule uploaded already?"): the Schedule tab's TL column now gives
+        # everyone else a team manager; this made-up schedule's TL is "Team Lead 001" for everyone, so nobody is left with no team manager.
+        self.assertEqual(set(self.lanes(self.timeline(tm="n:Team Lead 001"))), set(self.working[5:]))
 
     def test_it_works_together_with_the_shift_start_filter_and_keeps_it(self):
         who, seg = next((l["name"], s) for l in self.days.page(self.key, WED)["view"]["lanes"] if l["name"] in self.team1
@@ -98,9 +105,15 @@ class TheTeams(_Teams):
 
 class NoTeams(_Overtime):
     def test_with_no_team_managers_linked_there_is_no_filter(self):
+        # Re-pinned in Phase BZ (owner, 2026-11-23: "Why not taken from the schedule uploaded already?"): the Schedule tab's TL column now gives
+        # everyone else a team manager; this made-up schedule's TL is "Team Lead 001" for everyone, so nobody is left with no team manager.
+        # With no team manager anywhere there is still no filter (checked on the grouping itself); with the schedule's TL there is one.
+        from webapp.day import team_groups
+        view = self.days.page(self.key, WED)["view"]
+        self.assertEqual(team_groups(view, {}), [])
         page = html.unescape(self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}").get_data(as_text=True))
-        self.assertNotIn("Filter by team manager", page)
-        self.assertNotIn('class="tl-tm"', page)
+        self.assertIn("Filter by team manager", page)
+        self.assertRegex(page, rf"<b>Team Lead 001</b><small>{len(view['lanes'])} people")
 
 
 if __name__ == "__main__":

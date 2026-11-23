@@ -612,6 +612,14 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BZ (owner, 2026-11-23): the team manager from the schedule's TL column
+- "Why not taken from the schedule uploaded already?" The Schedule tab's TL column was already read (`versions.read_week`, "tl") and shown on the
+  Schedules page, but BX looked only at accounts. `DayBook.team_of(program, on)` now adds the TL of the schedule in use that day for everyone the account
+  and the sheet leave out (order: account, sheet, TL); a TL that is a team manager account joins it. Missed in BX because the search looked for
+  "team manager"/"team leader", not "TL".
+- Re-pinned with the reason (the made-up schedule's TL is "Team Lead 001" for everyone): four assertions in `test_bx_team_manager_filter` and two in
+  `test_bw_days_off_tab`. Tests: `test_bz_team_from_schedule.py`. The sheet box now says it is optional and corrects the TL column.
+
 ## Phase BY (owner, 2026-11-23): the roster name to team manager sheet
 - After BX's filter showed nothing on the server (no associate accounts linked), the owner chose "Yes build the roster name to team manager sheet".
   `webapp/team_sheet.py` reads two columns, Roster name and Team manager (.xlsx or .csv, with the people sheet's safe reader and card-number check;

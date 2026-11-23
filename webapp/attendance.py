@@ -1581,7 +1581,7 @@ class DayBook:
         return sorted((a["name"], a.get("language", "")) for a in self._week(row).get("associates", [])
                       if a["days"][day_index(on)].strip().casefold() == "off" and a["name"] not in called)
 
-    def team_of(self, program: str) -> Dict[str, Dict[str, Any]]:
+    def team_of(self, program: str, on: Optional[date] = None) -> Dict[str, Dict[str, Any]]:
         """Phase BX: roster name -> its team manager ({"id", "name"}), for the associates of ``program`` whose account has one. The account is
         found as swaps find it (an active associate account with that roster name that can open the program); the team manager must be active."""
         from .access import Access  # here, not at the top: access is built on this module's neighbours
@@ -1593,7 +1593,12 @@ class DayBook:
                 manager = team_manager_of(self.store, user["id"])
                 if manager:
                     found[user["roster_name"]] = {"id": manager["id"], "name": manager["display_name"]}
-        sheet = self.team_sheet(program)  # Phase BY: the LOB's team managers sheet for everyone the accounts leave out
+        sheet = dict(self.team_sheet(program))  # Phase BY: the LOB's team managers sheet for everyone the accounts leave out
+        if on is not None:  # Phase BZ (owner: "Why not taken from the schedule uploaded already?"): the Schedule tab's TL column, last
+            row, _ = self.version(program, on)
+            for a in (self._week(row).get("associates", []) if row else []):
+                if a.get("tl") and a["name"] not in sheet:
+                    sheet[a["name"]] = " ".join(a["tl"].split())
         if sheet:
             fold = lambda s: " ".join(str(s or "").split()).casefold()  # noqa: E731
             accounts: Dict[str, Dict[str, Any]] = {}
@@ -1626,7 +1631,7 @@ class DayBook:
         if row is None:
             return {"off": [], "called": [], "shifts": []}
         near = self.neighbours(program, on, row)
-        team = self.team_of(program)  # Phase BX: the team manager beside the name
+        team = self.team_of(program, on)  # Phase BX: the team manager beside the name (BZ: with the schedule's TL column)
         off = [{"name": name, "language": lang, "before": near["prev"].get(name), "after": near["next"].get(name),
                 "tm": team.get(name, {}).get("name", "")} for name, lang in self.off_today(program, on)]
         called = sorted((r["associate"], r["start"], r["end_min"]) for r in self.store.list_activities(program, [on.isoformat()])

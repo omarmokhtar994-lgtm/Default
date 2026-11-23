@@ -334,7 +334,7 @@ def register(app, ctx) -> None:
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
             # Phase BX: the team manager filter, beside the shift starts; both together show the people in both
-            team = days.team_of(program)
+            team = days.team_of(program, on)  # Phase BZ: the schedule's TL column too
             tms = team_groups(page["view"], team)
             tm = request.args.get("tm", "").strip()
             picked = next((x for x in tms if x["key"] == tm), None)

@@ -1857,7 +1857,9 @@ class ThePhaseWInTheBrowser(unittest.TestCase):
         expect(lanes).to_have_count(3)
         lanes.first.select_option("Sick")
         page.wait_for_load_state("load")
-        expect(page.locator(".shiftbar a[aria-current]")).to_contain_text("1 off")
+        # Re-pinned 2026-11-23 (Phase BX/BZ: a second filter row, by team manager, now sits under the shift starts, with its own picked button):
+        # the picked button is looked for in the shift-start row
+        expect(page.get_by_role("group", name="Filter by shift start").locator("a[aria-current]")).to_contain_text("1 off")
         expect(page.locator(".tl-lane select.att")).to_have_count(3)
         page.locator(".shiftpick").scroll_into_view_if_needed()
         page.wait_for_timeout(700)
@@ -2728,7 +2730,7 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
             page.screenshot(path=str(BW_SCREENS / f"days_off_{name}.png"), full_page=True)
             self.assertEqual(errors, [])
         row = page.locator("table.adh-t tbody tr").first
-        who = row.locator("th").inner_text()
+        who = row.locator("input[name=associate]").get_attribute("value")   # the heading also holds the team manager (Phase BX/BZ)
         row.locator("select[name=shift]").select_option(index=1)
         row.get_by_role("button", name="Cancel day off").click()
         page.wait_for_load_state("load")

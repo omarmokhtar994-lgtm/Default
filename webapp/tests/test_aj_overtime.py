@@ -11,6 +11,7 @@ from webapp.tests.test_overtime_side import NIGHT, LATE, _Overtime
 
 class TheCap(unittest.TestCase):
     def test_the_cap_is_the_longest_length_offered(self):
+        # Phase BV: still 4 hours, now the longest the suggestions offer and where the warning starts (no longer a refusal)
         self.assertEqual(OVERTIME_MAX, 240)
 
 
@@ -27,10 +28,12 @@ class FourHours(_Overtime):
         found = self.add(LATE, "after", 240)  # 08:00 to 17:00: 17:00 to 21:00
         self.assertEqual((found["lo"], found["hi"]), (1020, 1260))
 
-    def test_more_than_four_hours_is_refused_with_the_cap(self):
-        with self.assertRaises(ValueError) as said:
-            self.days.add_activity(self.key, self.wed(), LATE, "Overtime", "17:00", "21:05", 1, dry_run=True)
-        self.assertEqual(str(said.exception), "Overtime is offered up to 4 hours.")
+    def test_more_than_four_hours_is_kept_with_a_warning(self):
+        # Re-pinned 2026-11-23: the owner asked "make it unlimited with warnings" (Phase BV), so the measured contract changed from
+        # "refused with 'Overtime is offered up to 4 hours.'" to "kept, with a warning". 4 hours is now where the warning starts.
+        rec = self.days.add_activity(self.key, self.wed(), LATE, "Overtime", "17:00", "21:05", 1, dry_run=True)
+        self.assertEqual((rec["start"], rec["end"]), (1020, 1265))
+        self.assertIn("more than 4", rec["warning"])
 
     def test_the_dialog_note_says_four_hours(self):
         import html

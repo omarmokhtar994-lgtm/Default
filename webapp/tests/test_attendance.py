@@ -150,8 +150,9 @@ class TheAttendance(unittest.TestCase):
         with self.assertRaises(ValueError):  # overtime must touch the shift
             self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "22:00", "23:00", self.sara)
         # re-pinned in Phase AJ: the owner raised the overtime cap from 2 to 4 hours (2026-10-15)
-        with self.assertRaises(ValueError):  # at most 4 hours
-            self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara)
+        # re-pinned again 2026-11-23 (Phase BV, owner: "make it unlimited with warnings"): over 4 hours is kept, with a warning
+        self.assertIn("more than 4", self.days.add_activity("AE/AR B2B", WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara,
+                                                            dry_run=True)["warning"])
         # re-pinned in Phase AJ: overtime breaking the rest gap is kept with a warning (owner, 2026-10-15)
         for name, start, end in (("Associate 013", "09:00", "11:00"),  # Tuesday 14:00 - 23:00: 10 hours' rest
                                  ("Associate 008", "17:00", "19:00")):  # Thursday 05:00 - 14:00: 10 hours' rest

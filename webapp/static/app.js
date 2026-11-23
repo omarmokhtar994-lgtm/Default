@@ -997,6 +997,9 @@ function homeRefresh(now) {
     billable.hidden = !asks;
     from.hidden = whole.indexOf(k) >= 0 || k === "Overtime";
     from.querySelector("span").textContent = k === "Late" ? "Arrived at" : k === "Left early" ? "Left at" : "From";
+    // Phase BV: the 5 to 16 hour lengths are for overtime only
+    Array.prototype.forEach.call(minutes.querySelectorAll("option[data-ot-only]"), function (o) { o.hidden = o.disabled = k !== "Overtime"; });
+    if (minutes.selectedOptions[0] && minutes.selectedOptions[0].disabled) { minutes.value = usual[k] || "15"; }
     if (changedKind && usual[k]) { minutes.value = usual[k]; }
     overtimeSides(k === "Overtime");
     // Phase AY: the counts of breaks belong to overtime and a call-in only; the allowance or incident choice to a late login or early leave only

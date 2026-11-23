@@ -127,6 +127,22 @@ def _signed(hours: float) -> str:
     return f"{'−' if hours < 0 else '+'}{minutes // 60}:{minutes % 60:02d}"
 
 
+
+def _touching(lo: int, hi: int, span: Tuple[int, int], name: str) -> Tuple[int, int]:
+    """Phase BV: overtime typed as clock times ``lo`` to ``hi`` (minutes of a day), placed against the shift ``span``: ending when it starts, or
+    starting when it ends (either may be after midnight). Any length under a day; ValueError when it touches neither edge or would start the
+    day before."""
+    length = (hi - lo) % 1440
+    if not length:
+        raise ValueError("The end time must be after the start time.")
+    if hi == span[0] % 1440:
+        if span[0] - length < 0:
+            raise ValueError(f"{name}'s shift starts at {hm(span[0])}, so overtime from {hm(lo)} would start the day before.")
+        return span[0] - length, span[0]
+    if lo == span[1] % 1440:
+        return span[1], span[1] + length
+    raise ValueError(f"Overtime has to start when {name}'s shift ends ({hm(span[1])}) or end when it starts ({hm(span[0])}).")
+
 def _clock(text: str) -> Optional[int]:
     found = HHMM.match((text or "").strip())
     return int(found.group(1)) * 60 + int(found.group(2)) if found else None
@@ -1378,8 +1394,11 @@ class DayBook:
         lo, hi = _clock(start), _clock(end)
         if lo is None or hi is None:
             raise ValueError("Give the start and end like 13:05.")
-        lo += 1440 if lo < span[0] - OVERTIME_MAX else 0
-        hi += 1440 if hi <= lo else 0
+        if kind == "Overtime":  # Phase BV: any length, placed by the shift edge it touches (no longer read through the 4-hour cap)
+            lo, hi = _touching(lo, hi, span, name)
+        else:
+            lo += 1440 if lo < span[0] - OVERTIME_MAX else 0
+            hi += 1440 if hi <= lo else 0
         if lo % STEP or hi % STEP:
             raise ValueError("Activities go in 5-minute steps.")
         status = next((r["status"] for r in self.store.list_attendance(program, [on.isoformat()])
@@ -1387,14 +1406,19 @@ class DayBook:
         if status in ABSENT:
             raise ValueError(f"{name} is marked {status.lower()} for this shift.")
         if kind == "Overtime":
-            if not (hi == span[0] or lo == span[1]):
-                raise ValueError(f"Overtime has to start when {name}'s shift ends ({hm(span[1])}) or end when it "
-                                 f"starts ({hm(span[0])}).")
-            if hi - lo > OVERTIME_MAX:
-                raise ValueError(f"Overtime is offered up to {OVERTIME_MAX // 60} hours.")
+            near = self.neighbours(program, on, row)  # one person cannot work two shifts at once (Phase BV)
+            prv, nxt = near["prev"].get(name), near["next"].get(name)
+            if nxt and hi > nxt[0] + 1440:
+                raise ValueError(f"Overtime to {hm(hi)} runs into {name}'s next shift, which starts at {hm(nxt[0])}.")
+            if prv and lo < prv[1] - 1440:
+                raise ValueError(f"Overtime from {hm(lo)} runs into {name}'s previous shift, which ends at {hm(prv[1])}.")
             rest = int(float(week.get("settings", {}).get("rest_gap_hours") or 0) * 60)
-            # owner, 2026-10-15: overtime that breaks the rest gap is kept, with a warning
-            warning = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
+            # owner, 2026-10-15: overtime that breaks the rest gap is kept, with a warning; owner, 2026-11-23: so is overtime over 4 hours
+            said = []
+            if hi - lo > OVERTIME_MAX:
+                said.append(f"{name} would work {(hi - lo) / 60:g} hours of overtime, more than {OVERTIME_MAX // 60}.")
+            gap = self._rest(program, on, row, name, lo, hi, rest, refuse=False)
+            warning = " ".join(said + ([gap] if gap else []))
         else:
             room = span
             if kind in EXTRA_BREAKS:  # Phase AY: a break may sit in the overtime the person has that day too

@@ -405,7 +405,8 @@ def register(app, ctx) -> None:
             own = last_night + kept if not nobody else kept + last_night
             side = "after" if first and first["start"] < t + step else "before"  # before, as always, unless it ended
             reach = (first["start"] - t if side == "before" else t + step - first["end"]) if first else 0
-            minutes = min([m for m in ADD_LENGTHS if reach <= m <= OVERTIME_MAX] or [OVERTIME_MAX]) if first else None
+            # Phase BV: the length that covers the interval, past 4 hours too now that overtime has no cap (16 hours at most)
+            minutes = min([m for m in ADD_LENGTHS + OT_LENGTHS if reach <= m] or [OT_LENGTHS[-1]]) if first else None
             off = days.off_today(program, held_on)  # for "Day off cancelled" (Phase S)
             shifts = days.shift_library(program, held_on)
             add_panel = {"t": t, "end": t + step, "person": request.args.get("person", ""), "date": held_on,
@@ -491,7 +492,7 @@ def register(app, ctx) -> None:
                                log_page=ctx._paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
-                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, bar=bar,
+                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, ot_lengths=OT_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff, chfix=chfix,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
@@ -633,6 +634,7 @@ def register(app, ctx) -> None:
         return redirect(url_for("day_page", program=program, date=on.isoformat(), window="operating"), code=303)
 
     ADD_LENGTHS = (5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240)  # minutes offered by "+ Add"
+    OT_LENGTHS = tuple(range(300, 961, 60))  # Phase BV: overtime only, 5 to 16 hours (any length is kept; over 4 hours says a warning)
     # What each "+ Add" choice is to a LOB's group rule (Phase AC: the tick shows only for a change that would post)
     GROUP_KIND = {**{k: "added_break" for k in ("Break", "Lunch")}, **{k: "aux" for k in AUX},
                   **{k: "private" for k in ABSENT_STATES}, **{k: "late" for k in ("Late", "Left early")},

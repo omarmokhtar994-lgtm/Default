@@ -40,9 +40,11 @@ class TheRestGap(unittest.TestCase):
         self.assertIn(found["level"], ("warn", "bad"))
 
     def test_the_other_overtime_rules_still_refuse(self):
-        for start, end in (("22:00", "23:00"), ("21:00", "01:05")):  # not touching the shift; over 4 hours
-            with self.assertRaises(ValueError):
-                self.days.add_activity(AR, WED, "Associate 001", "Overtime", start, end, self.sara)
+        with self.assertRaises(ValueError):  # not touching the shift
+            self.days.add_activity(AR, WED, "Associate 001", "Overtime", "22:00", "23:00", self.sara)
+        # Re-pinned 2026-11-23 (Phase BV, owner: "make it unlimited with warnings"): over 4 hours was refused; it is now kept with a warning
+        rec = self.days.add_activity(AR, WED, "Associate 001", "Overtime", "21:00", "01:05", self.sara, dry_run=True)
+        self.assertIn("more than 4", rec["warning"])
 
 
 class ThePage(_Overtime):

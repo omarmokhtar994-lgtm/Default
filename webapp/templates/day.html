@@ -443,7 +443,7 @@
 {% elif tab == 'cover' %}
 <section class="panel" aria-labelledby="ot-h">
   <h2 id="ot-h">Short: offer overtime</h2>
-  <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: at most {{ overtime_hours }} hours, keeping the program's rest gap. Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
+  <p class="note">People whose shift ends just before a short interval, or starts just after it, could stay on or come in early: suggested up to {{ overtime_hours }} hours, keeping the program's rest gap (longer overtime goes in with + Add and is kept with a warning). Offer it, and when they accept, press their name: it counts on the floor and is logged.</p>
   {% if not cover.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
   {% if cover.overtime %}<div class="scroll" role="region" tabindex="0" aria-label="Short: offer overtime (scrolls sideways)"><table class="adh-t"><thead><tr><th scope="col">Interval</th><th scope="col" class="n">Buffer</th><th scope="col" class="n">People short</th><th scope="col">Who could cover (accepted → press)</th></tr></thead>
   <tbody>{% for row in ot_page[0] %}<tr><td><b>{{ hm(row.t) }}</b></td><td class="n bad">{{ row.buffer|hmm }}</td><td class="n">{{ row.short }}</td><td>{% for o in row.offers %}{{ overtime(o) }}{% else %}<span class="dim">nobody next to it within the rules</span>{% endfor %}</td></tr>{% endfor %}</tbody></table></div>{{ pager(ot_page[1], "Short intervals") }}
@@ -537,7 +537,7 @@
     <h3 id="cover-h">Cover {{ hm(cp.t) }} to {{ hm(cp.end) }} <small>buffer {{ cp.cell.pm|hmm if cp.cell.pm is not none else '–' }}, need {{ cp.cell.need }}, on the floor {{ cp.cell.now|num }}</small></h3>
     {% if not cp.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
     <div class="cover-cols">
-      <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, up to {{ overtime_hours }} hours, keeping the rest gap. Press a name once they accept.</p>
+      <div><h4>Overtime</h4><p class="note">Stay on after the shift or come in early, suggested up to {{ overtime_hours }} hours, keeping the rest gap (longer goes in with + Add, with a warning). Press a name once they accept.</p>
         {% for o in cp.overtime %}{{ overtime(o, 'board', cp.t, cp.date) }}{% else %}<p class="empty">Nobody's shift ends just before or starts just after this {{ unit.get(v.interval, 'interval')[:-1] }} within the rules.</p>{% endfor %}</div>
       <div><h4>Day off cancelled</h4><p class="note">People off today who could come in on a Shift Library shift covering this {{ unit.get(v.interval, 'interval')[:-1] }}, keeping the rest gap to yesterday and tomorrow; those covering the most short intervals first. Their breaks follow the plan's for that shift.</p>
         {% for o in cp.dayoff %}{{ accept(o.name, 'Called in', o.start, o.end, o.shift ~ (' · covers ' ~ o.covers ~ ' short' if o.covers else '') ~ ' · ' ~ o.language[:3]|upper, 'board', cp.t, cp.date) }}{% else %}<p class="empty">Nobody off today could come in for this {{ unit.get(v.interval, 'interval')[:-1] }} within the rest gap.</p>{% endfor %}</div>
@@ -606,7 +606,7 @@
     </div>{% endif %}
     <div class="dlg-grid">
       <label data-from-label><span>From</span> <input type="time" name="from" value="{{ hm(ap.t) }}" step="300" required></label>
-      <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == (ap.default_minutes or 15) %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}</select></label>
+      <label data-length><span>Length</span> <select name="minutes">{% for m in lengths %}<option value="{{ m }}"{% if m == (ap.default_minutes or 15) %} selected{% endif %}>{% if m < 60 %}{{ m }} min{% else %}{{ m // 60 }} h{% if m % 60 %} {{ m % 60 }}{% endif %}{% endif %}</option>{% endfor %}{% for m in ot_lengths %}<option value="{{ m }}" data-ot-only{% if m == ap.default_minutes %} selected{% endif %}>{{ m // 60 }} h</option>{% endfor %}</select></label>
       {% if ap.off %}<label data-to-label hidden><span>To</span> <input type="time" name="to" value="{{ hm(ap.shift_pick[2]) if ap.shift_pick else '' }}" step="900"></label>{% endif %}
     </div>
     <div class="dlg-grid extra-breaks" data-extra-breaks hidden><label><span>Short breaks</span> <input type="number" name="shorts" min="0" max="4" value="0" inputmode="numeric"></label><label><span>Lunches</span> <input type="number" name="lunches" min="0" max="2" value="0" inputmode="numeric"></label><p class="note">Overtime and a call-in only: how many breaks they take. 0 adds none. Any other number is placed for you inside that time, by the same rules as Plan breaks automatically.</p></div>

@@ -2591,6 +2591,7 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
 
 
 AA_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_aa" / "screens"
+BV_SCREENS = REPO / "evidence" / "phase_bv" / "screens"
 
 
 class ThePhaseAAInTheBrowser(unittest.TestCase):
@@ -2673,6 +2674,29 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
         dialog.get_by_role("button", name="Add overtime").click()
         page.wait_for_load_state("load")
         expect(page.locator("p.flash").first).to_contain_text("Recorded: Associate 021, Overtime 17:00 to 17:30.")
+        self.assertEqual(errors, [])
+
+    def test_phase_bv_overtime_lengths_past_four_hours(self):
+        # Phase BV (owner, 2026-11-23: "make it unlimited with warnings"): 5 to 16 hours for overtime only, and the preview says the warning
+        page = self.page(width=1280, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}&view=board&add=480&person=Associate+021", errors)
+        dialog = page.locator("#add-dialog")
+        long = dialog.locator('select[name=minutes] option[value="360"]')
+        dialog.get_by_label("Break", exact=True).check()
+        expect(long).to_have_attribute("disabled", "")      # (a hidden <option> is not read as disabled by to_be_disabled)
+        dialog.get_by_label("Overtime").check()
+        expect(long).not_to_have_attribute("disabled", "")
+        dialog.locator("select[name=minutes]").select_option("360")
+        dialog.get_by_label("Before the shift").check()
+        expect(dialog.locator("[data-ot-time=before]")).to_have_text("02:00 to 08:00")
+        expect(dialog.locator("[data-effect]")).to_contain_text("6 hours of overtime, more than 4")
+        BV_SCREENS.mkdir(parents=True, exist_ok=True)
+        dialog.screenshot(path=str(BV_SCREENS / "overtime_six_hours.png"))
+        dialog.get_by_label("Break", exact=True).check()
+        self.assertNotEqual(dialog.locator("select[name=minutes]").input_value(), "360")
         self.assertEqual(errors, [])
 
     def test_phase_aa_screens(self):

@@ -612,6 +612,14 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BV (owner, 2026-11-23): overtime of any length, with a warning over 4 hours
+- "The website is not accepting OT more than 4 hours make it unlimited with warnings." `DayBook.add_activity` places overtime by the shift edge it
+  touches (`_touching` in `webapp/attendance.py`), any length under a day; over `OVERTIME_MAX` (still 240) adds "would work N hours of overtime, more
+  than 4" beside the rest-gap warning (preview and page). Refused: overtime into the person's own previous or next shift (new), and before a shift that
+  would start the day before (unchanged). + Add offers 5 to 16 h for Overtime only (`OT_LENGTHS`, `data-ot-only`). The automatic offers still stop at 4 h.
+- Re-pinned with the reason: `test_aj_overtime`, `test_aj_rest`, `test_attendance` (each pinned the refusal). Tests: `test_bv_overtime_unlimited.py`,
+  `ThePhaseAAInTheBrowser.test_phase_bv_overtime_lengths_past_four_hours` (screen `evidence/phase_bv/screens/overtime_six_hours.png`).
+
 ## Phase BU (owner, 2026-11-19): alerts by email ("1": the owner's Gmail sends to itself with an app password)
 - `deploy/mail_alert.py` (stdlib smtplib, STARTTLS on 587, `smtp.gmail.com` by default): `send()` returns None when `ALERT_EMAIL` is unset, False with
   a reason (never the password; a refused sign-in shows only its code) when it cannot send. `disk_alert.py` emails the same words as the group post

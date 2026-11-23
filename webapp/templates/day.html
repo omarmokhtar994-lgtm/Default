@@ -119,7 +119,8 @@
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='adherence') }}"{% if tab == 'adherence' %} class="on" aria-current="page"{% endif %}>Adherence</a>
     {% if not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='meeting') }}"{% if tab == 'meeting' %} class="on" aria-current="page"{% endif %}>Find a time</a>
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='sessions') }}"{% if tab == 'sessions' %} class="on" aria-current="page"{% endif %}>Booked sessions</a>
-    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime</a>{% endif %}
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}"{% if tab == 'cover' %} class="on" aria-current="page"{% endif %}>Overtime</a>
+    <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='daysoff') }}"{% if tab == 'daysoff' %} class="on" aria-current="page"{% endif %}>Days off</a>{% endif %}
     {% if v.channels and not merged %}<a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='channels') }}"{% if tab == 'channels' %} class="on" aria-current="page"{% endif %}>Channels</a>{% endif %}
     <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='requests', merge='1' if merged else none) }}"{% if tab == 'requests' %} class="on" aria-current="page"{% endif %}>Requests{% if changes_n %} <span class="count">{{ changes_n }}</span>{% endif %}</a>
   </nav>
@@ -476,6 +477,29 @@
     {% if seg.offset == 0 and a.kind == 'Called in' and not seg.breaks and not (seg.activities|selectattr('kind', 'in', ['Break', 'Lunch'])|list) %}<form method="post" action="{{ url_for('day_call_in_breaks') }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="associate" value="{{ lane.name }}"><button type="submit" class="quiet">Plan their breaks</button></form>{% endif %}
     {% if seg.offset == 0 and a.kind not in ('Called in', 'Overtime', 'VTO') %}<form method="post" action="{{ url_for('day_activity_edit') }}" class="inline edit-act"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="id" value="{{ a.id }}"><input type="hidden" name="view" value="cover"><input type="time" name="at" step="300" value="{{ hm(a.start) }}" aria-label="New start of {{ a.kind|lower }} for {{ lane.name }}"> <input type="time" name="to" step="300" value="{{ hm(a.end) }}" aria-label="New end of {{ a.kind|lower }} for {{ lane.name }}"> <button type="submit" class="quiet">Save time</button></form>{% endif %}</li>{% endfor %}{% endfor %}{% endfor %}</ul>
   {% if not listed %}<p class="empty">No meetings, training or overtime recorded for this day.</p>{% endif %}
+</section>
+{% elif tab == 'daysoff' and daysoff %}{% set n_off = daysoff.off|length %}
+<section class="panel" aria-labelledby="do-h">
+  <h2 id="do-h">Days off</h2>
+  <p class="note">{{ n_off }} {{ 'person' if n_off == 1 else 'people' }} off on {{ on.strftime('%A %d %b') }} and not called in. Cancel a day off on a Shift Library shift, or type the start and end (typed times win). It is the same as Day off cancelled in + Add: the plan's breaks for that shift, and the rest gap to the day before and after kept with a warning when it is short.</p>
+  {% if not daysoff.next_known %}<p class="note warn-note">{{ tomorrow_unchecked }}</p>{% endif %}
+  {% if daysoff.off %}<div class="scroll" role="region" tabindex="0" aria-label="Days off (scrolls sideways)"><table class="adh-t do-t">
+  <thead><tr><th scope="col">Who</th><th scope="col">Language</th><th scope="col">Day before</th><th scope="col">Day after</th><th scope="col">Cancel the day off</th></tr></thead>
+  <tbody>{% for p in daysoff.off %}<tr>
+    <th scope="row">{{ p.name }}</th><td data-label="Language">{{ p.language or '–' }}</td>
+    <td data-label="Day before">{% if p.before %}{{ hm(p.before[0]) }} to {{ hm(p.before[1]) }}{% else %}<span class="dim">Off</span>{% endif %}</td>
+    <td data-label="Day after">{% if p.after %}{{ hm(p.after[0]) }} to {{ hm(p.after[1]) }}{% else %}<span class="dim">{{ 'Off' if daysoff.next_known else 'Not known yet' }}</span>{% endif %}</td>
+    <td>{% if can('rta_change') %}<form method="post" action="{{ url_for('day_add') }}" class="do-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ zone_fields() }}<input type="hidden" name="program" value="{{ program }}"><input type="hidden" name="date" value="{{ on.isoformat() }}"><input type="hidden" name="view" value="daysoff"><input type="hidden" name="what" value="Day off cancelled"><input type="hidden" name="associate" value="{{ p.name }}">
+      <label>Shift <select name="shift"><option value="">Pick a shift</option>{% for label, lo, hi in daysoff.shifts %}<option value="{{ label }}">{{ label|in_zone }}</option>{% endfor %}</select></label>
+      <label>Or from <input type="time" name="from" step="900"></label>
+      <label>To <input type="time" name="to" step="900"></label>
+      <button class="primary" type="submit">Cancel day off</button>
+    </form>{% else %}<span class="dim">Only those who can change the RTA cancel a day off.</span>{% endif %}</td>
+  </tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="empty">Nobody else is off on this day.</p>{% endif %}
+  {% if daysoff.called %}<h3>Already called in</h3>
+  <ul class="log">{% for name, lo, hi in daysoff.called %}<li><b>{{ name }}</b> {{ hm(lo) }} to {{ hm(hi) }}</li>{% endfor %}</ul>
+  <p class="note">To undo one, delete it under Activities on this day on the <a href="{{ url_for('day_page', program=program, date=on.isoformat(), measure=measure, view='cover') }}">Overtime</a> tab.</p>{% endif %}
 </section>
 {% elif tab == 'requests' %}
 <section class="panel req-list" id="changes" aria-labelledby="chg-h">

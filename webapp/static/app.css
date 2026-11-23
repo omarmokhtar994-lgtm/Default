@@ -1951,3 +1951,23 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 .exp-row label { min-width: 0; }  /* a label may be narrower than its control's own width, so a native "Choose file" box cannot push a 320 px screen sideways */
 .exp-row input[type="file"] { max-width: 100%; min-width: 0; }
 
+
+/* Phase BW: the RTA's Days off tab. Each person's cancel form on one line on a wide screen; on a phone every person is a card. */
+.do-t td { vertical-align: middle; }
+.do-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; margin: 0; }
+.do-form label { margin: 0; flex: 0 0 auto; font-weight: 600; font-size: 0.8125rem; color: var(--dim); }
+.do-form select { min-width: 11rem; }
+.do-form input[type=time] { width: 8.5rem; }
+.do-form button { white-space: nowrap; }
+@media (max-width: 720px) {
+  .do-t thead { display: none; }
+  .do-t, .do-t tbody, .do-t tr, .do-t th, .do-t td { display: block; width: 100%; }
+  .do-t tr { padding: 12px 0; border-bottom: 1px solid var(--rail); }
+  .do-t th[scope=row] { font-size: 1rem; padding: 0 0 4px; }
+  .do-t td { padding: 2px 0; }
+  .do-t td[data-label]::before { content: attr(data-label) ": "; color: var(--dim); }
+  .do-form { margin-top: 8px; }
+  .do-form label { flex: 1 1 100%; }
+  .do-form label:has(input[type=time]) { flex: 1 1 calc(50% - 6px); }  /* from and to side by side */
+  .do-form select, .do-form input[type=time] { width: 100%; min-width: 0; }
+}

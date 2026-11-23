@@ -248,7 +248,7 @@ def register(app, ctx) -> None:
         measure = measure if measure in MEASURES else (ProgramBook(app.extensions["store"]).day_measure(program)
                                                        if program else "interval")
         tab = request.args.get("view", "")
-        tab = tab if tab in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue", "requests") else "timeline"
+        tab = tab if tab in ("board", "adherence", "meeting", "sessions", "cover", "replan", "channels", "bulk", "rescue", "requests", "daysoff") else "timeline"
         if merge and tab not in MERGE_TABS:
             flash("Pick one LOB for that tab: it plans or changes one LOB's schedule.")
             return redirect(url_for("day_page", program=program, date=on.isoformat(), merge="1", tz=g.zone,
@@ -308,6 +308,7 @@ def register(app, ctx) -> None:
         finder: Dict[str, Any] = {}
         cover = None
         sessions = days.sessions(program, on) if page and tab == "sessions" else []
+        daysoff = days.days_off_panel(program, on) if page and tab == "daysoff" else None  # Phase BW
         if page and tab == "meeting":
             finder = {"who": request.args.getlist("who"), "minutes": request.args.get("minutes", 30, type=int),
                       "from": request.args.get("from", "09:00"), "to": request.args.get("to", "18:00"),
@@ -492,7 +493,7 @@ def register(app, ctx) -> None:
                                log_page=ctx._paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
-                               add_panel=add_panel, person_panel=person_panel, lengths=ADD_LENGTHS, ot_lengths=OT_LENGTHS, bar=bar,
+                               add_panel=add_panel, daysoff=daysoff, person_panel=person_panel, lengths=ADD_LENGTHS, ot_lengths=OT_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff, chfix=chfix,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()
@@ -1289,7 +1290,7 @@ def register(app, ctx) -> None:
     def _to_row(program: str, on: Optional[date], view: str, at: str):  # type: ignore[no-untyped-def]
         on = _date(request.form.get("anchor", "")) or on  # Phase AI: the day the page showed
         args = {"program": program, "date": on.isoformat() if on else None,
-                "view": view if view in ("board", "cover") else None}
+                "view": view if view in ("board", "cover", "daysoff") else None}
         if MINUTE.match(at):
             args["_anchor"] = f"row-{at}"
         return redirect(url_for("day_page", **{k: v for k, v in args.items() if v}), code=303)
@@ -1302,9 +1303,15 @@ def register(app, ctx) -> None:
         try:
             program, on, name, what, start, minutes, billable = _add_fields()
             with_dept, with_whom, why = _aux_answers(what, program)
+            end = _typed("to", program, on)
+            if what == DAY_OFF and not (start and end):  # Phase BW: the Days off tab picks a Shift Library shift (its own times)
+                pick = next((x for x in _days().shift_library(program, on) if x[0] == request.form.get("shift", "")), None)
+                if pick is None:
+                    raise ValueError("Pick a shift from the Shift Library, or type the start and end.")
+                start, end = plain_hm(pick[1]), plain_hm(pick[2])
             with leave_out(_left_out_asked()), _days().action(program, on, g.user["id"]):
                 found = _days().add_item(program, on, name, what, start, minutes, g.user["id"], billable=billable,
-                                         note=request.form.get("note", ""), end=_typed("to", program, on),
+                                         note=request.form.get("note", ""), end=end,
                                          with_whom=with_whom, why=why, with_dept=with_dept,
                                          side=request.form.get("side", ""), **_late_answers())
                 _plan_asked_breaks(program, on, name, what)

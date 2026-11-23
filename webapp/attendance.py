@@ -1581,6 +1581,19 @@ class DayBook:
         return sorted((a["name"], a.get("language", "")) for a in self._week(row).get("associates", [])
                       if a["days"][day_index(on)].strip().casefold() == "off" and a["name"] not in called)
 
+    def days_off_panel(self, program: str, on: date) -> Dict[str, Any]:
+        """Phase BW: the RTA's Days off tab. Everyone off on ``on`` and not called in yet, with their working span the day before and after
+        (None when off or unknown), the people already called in that day, and the Shift Library to pick from."""
+        row, _ = self.version(program, on)
+        if row is None:
+            return {"off": [], "called": [], "shifts": []}
+        near = self.neighbours(program, on, row)
+        off = [{"name": name, "language": lang, "before": near["prev"].get(name), "after": near["next"].get(name)}
+               for name, lang in self.off_today(program, on)]
+        called = sorted((r["associate"], r["start"], r["end_min"]) for r in self.store.list_activities(program, [on.isoformat()])
+                        if r["kind"] == CALLED_IN)
+        return {"off": off, "called": called, "shifts": self.shift_library(program, on), "next_known": near["next_known"]}
+
     def shift_library(self, program: str, on: date) -> List[Tuple[str, int, int]]:
         """The Shift Library of the schedule read for ``on``: (label, start, end) in start order."""
         row, _ = self.version(program, on)

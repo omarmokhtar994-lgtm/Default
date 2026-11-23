@@ -2592,6 +2592,7 @@ class ThePhaseZInTheBrowser(unittest.TestCase):
 
 AA_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_aa" / "screens"
 BV_SCREENS = REPO / "evidence" / "phase_bv" / "screens"
+BW_SCREENS = REPO / "evidence" / "phase_bw" / "screens"
 
 
 class ThePhaseAAInTheBrowser(unittest.TestCase):
@@ -2697,6 +2698,29 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
         dialog.screenshot(path=str(BV_SCREENS / "overtime_six_hours.png"))
         dialog.get_by_label("Break", exact=True).check()
         self.assertNotEqual(dialog.locator("select[name=minutes]").input_value(), "360")
+        self.assertEqual(errors, [])
+
+    def test_phase_bw_days_off_tab(self):
+        # Phase BW (owner, 2026-11-23: a tab "for all available off days for that day in order to cancel any of them")
+        BW_SCREENS.mkdir(parents=True, exist_ok=True)
+        for width, name in ((1440, "desktop"), (390, "phone")):
+            page = self.page(width=width, height=900)
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            self.sign_in(page)
+            self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}&view=daysoff", errors)
+            expect(page.get_by_role("navigation", name="Views").get_by_role("link", name="Days off")).to_have_attribute("aria-current", "page")
+            expect(page.get_by_role("heading", name="Days off")).to_be_visible()
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth - window.innerWidth"), 1, name)
+            page.screenshot(path=str(BW_SCREENS / f"days_off_{name}.png"), full_page=True)
+            self.assertEqual(errors, [])
+        row = page.locator("table.adh-t tbody tr").first
+        who = row.locator("th").inner_text()
+        row.locator("select[name=shift]").select_option(index=1)
+        row.get_by_role("button", name="Cancel day off").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text(f"Recorded: {who}, Day off cancelled")
+        expect(page.locator("table.adh-t tbody th", has_text=who)).to_have_count(0)
         self.assertEqual(errors, [])
 
     def test_phase_aa_screens(self):

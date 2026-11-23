@@ -612,6 +612,14 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BW (owner, 2026-11-23): the RTA's Days off tab
+- "Add a tab in RTA for all available off days for that day in order to cancel any of them if needed." `view=daysoff` (one LOB; hidden when LOBs are
+  merged) lists `DayBook.days_off_panel`: everyone off and not called in, their span the day before and after (`neighbours`), who is already called in,
+  and the Shift Library. Each row posts to `/day/add` as "Day off cancelled"; `day_add` now takes a Shift Library `shift` when no From and To are typed
+  (typed times win; neither is refused in words). Same checks and rest-gap warning as + Add. Undo stays under Activities on the Overtime tab.
+- Styles `.do-t`/`.do-form` in `app.css` (a card per person under 720 px). Tests: `test_bw_days_off_tab.py`,
+  `ThePhaseAAInTheBrowser.test_phase_bw_days_off_tab` (screens `evidence/phase_bw/screens/`).
+
 ## Phase BV (owner, 2026-11-23): overtime of any length, with a warning over 4 hours
 - "The website is not accepting OT more than 4 hours make it unlimited with warnings." `DayBook.add_activity` places overtime by the shift edge it
   touches (`_touching` in `webapp/attendance.py`), any length under a day; over `OVERTIME_MAX` (still 240) adds "would work N hours of overtime, more

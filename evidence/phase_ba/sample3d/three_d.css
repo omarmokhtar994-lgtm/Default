@@ -1,0 +1,23 @@
+/* © 2026 Omar Mokhtar. All rights reserved. */
+:root { --bg: #E8EFF6; --ink: #12233A; --dim: #46556F; --ease: cubic-bezier(.23, 1, .32, 1); --phone: #1A47A8; --chat: #B4468F; --email: #2F7D5B; --brk: #8C97A8; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(54rem 34rem at 6% -10%, #C4DDF3, transparent 62%), radial-gradient(46rem 32rem at 100% 0, #C6EEDF, transparent 60%), var(--bg); color: var(--ink); font: 1rem/1.5 system-ui, sans-serif; min-height: 100vh; }
+.bar { padding: .7rem 1.2rem; background: #0B1220; color: #fff; display: flex; gap: 1rem; flex-wrap: wrap; } .bar span { color: #B8C4D8; }
+main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 2rem; align-items: center; min-height: 26rem; }
+h1 { font-size: clamp(1.9rem, 1rem + 3vw, 3.2rem); line-height: 1.05; margin: 0 0 1rem; }
+.fine { color: var(--dim); font-size: .9rem; } .wide { margin-top: 1.5rem; max-width: none; }
+.stage { perspective: 1200px; perspective-origin: 50% 40%; height: 22rem; display: grid; place-items: center; }
+.deck { position: relative; width: min(30rem, 100%); height: 16rem; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-32deg); animation: drift 14s ease-in-out infinite alternate; }
+.day { position: absolute; inset: 0; border-radius: 14px; background: #FFFFFFE6; border: 1px solid #FFFFFF; box-shadow: 0 30px 40px -24px #12233A66; display: grid; align-content: center; gap: .7rem; padding: 1.3rem 1.5rem; }
+.d1 { transform: translateZ(0); } .d2 { transform: translateZ(2.6rem); } .d3 { transform: translateZ(5.2rem); } .d4 { transform: translateZ(7.8rem); }
+.b { display: block; height: .9rem; border-radius: 4px; } .b1 { width: 62%; background: var(--phone); } .b2 { width: 44%; margin-left: 20%; background: var(--chat); } .b3 { width: 52%; margin-left: 8%; background: var(--email); } .b4 { width: 36%; margin-left: 34%; background: var(--brk); }
+@keyframes drift { from { transform: rotateX(58deg) rotateZ(-34deg) translateZ(0); } to { transform: rotateX(54deg) rotateZ(-28deg) translateZ(1.2rem); } }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 1rem; margin-top: 1.5rem; perspective: 900px; }
+.tile { padding: 1.2rem 1.4rem; border-radius: 20px; background: #FFFFFFE6; border: 1px solid #fff; box-shadow: 0 1px 2px #12233A22, 0 14px 30px -20px #12233A66; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 140ms var(--ease), box-shadow 140ms var(--ease); will-change: auto; }
+.tile h2 { margin: 0; font-size: 1.1rem; } .tile .big { margin: .2rem 0 0; font-size: 2.4rem; font-weight: 800; line-height: 1; } .tile small { font-size: 1rem; font-weight: 400; color: var(--dim); }
+@media (hover: hover) and (pointer: fine) { .tile:hover { box-shadow: 0 2px 4px #12233A22, 0 24px 40px -18px #12233A77; } }
+@media (max-width: 52rem) { .hero { grid-template-columns: 1fr; } .stage { height: 17rem; } .deck { height: 12rem; } }
+@media (prefers-reduced-motion: reduce) { .deck { animation: none; } .tile { transition: none; } }
+@media print { .stage { display: none; } }
+.paused .deck { animation-play-state: paused; } main { overflow-x: clip; }

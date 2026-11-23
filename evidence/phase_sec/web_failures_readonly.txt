@@ -1,0 +1,62 @@
+== test_ax_downloads
+1[0m" 304 -
+127.0.0.1 - - [11/Nov/2026 09:13:25] "[36mGET /static/mark.svg HTTP/1.1[0m" 304 -
+E
+======================================================================
+ERROR: test_the_weekday_grid_downloads_too (webapp.tests.test_ax_downloads.TheDownloadsInTheBrowser.test_the_weekday_grid_downloads_too)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/pathlib/_local.py", line 722, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/sec_tmp/readonly-check-461co57_/package/evidence/phase_ax/screens'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/sec_tmp/readonly-check-461co57_/package/webapp/tests/test_ax_downloads.py", line 125, in test_the_weekday_grid_downloads_too
+    out.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 726, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 722, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/tmp/sec_tmp/readonly-check-461co57_/package/evidence/phase_ax'
+
+----------------------------------------------------------------------
+Ran 7 tests in 24.816s
+
+FAILED (errors=1)
+
+
+== test_ax_merge_pick
+E.........
+======================================================================
+ERROR: setUpClass (webapp.tests.test_ax_merge_pick.ThePickInTheBrowser)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/pathlib/_local.py", line 722, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/tmp/sec_tmp/readonly-check-461co57_/package/evidence/phase_ax/screens'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/sec_tmp/readonly-check-461co57_/package/webapp/tests/test_ax_merge_pick.py", line 138, in setUpClass
+    cls.SCREENS.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 726, in mkdir
+    self.parent.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 722, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: '/tmp/sec_tmp/readonly-check-461co57_/package/evidence/phase_ax'
+
+----------------------------------------------------------------------
+Ran 9 tests in 26.262s
+
+FAILED (errors=1)

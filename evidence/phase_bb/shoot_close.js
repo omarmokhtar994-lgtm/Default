@@ -1,0 +1,2 @@
+const { chromium } = require('playwright'); const path = require('path');
+(async () => { const b = await chromium.launch(); for (const look of ['light','dark','draft']) { const c = await b.newContext({viewport:{width:900,height:900}}); const p = await c.newPage(); await p.goto('file://'+path.resolve('charts_close.html')); await p.evaluate(t=>document.documentElement.dataset.theme=t, look); await p.waitForTimeout(300); await p.screenshot({path:`shots/close_${look}.png`, fullPage:true}); await c.close(); } await b.close(); })();

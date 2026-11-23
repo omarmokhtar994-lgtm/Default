@@ -1,0 +1,29 @@
+# © 2026 Omar Mokhtar. All rights reserved.
+# Test modules that run the channel planner's CP-SAT solve on a wall-clock limit. Run them one at a time, never beside another such module:
+# two at once on 4 cores halve each solve's search and the measured limits fail (evidence/phase_bl/channel_solver_ab.md). One module a line.
+test_af_break_edges
+test_af_email_overnight
+test_af_planner_rules
+test_ag_myweek
+test_am_fix_channels
+test_an_correctness
+test_an_decisions
+test_an_http
+test_an_repair
+test_ap_channel_hours
+test_ap_channel_hours_pages
+test_ax_break_fit
+test_ax_channel_shape
+test_ay_cap_mode
+test_ay_channel_scenarios
+test_ay_fair_week
+test_bc_break_changes
+test_bc_channel_rotation
+test_bc_long_stretch
+test_bc_two_ticks
+test_bl_channel_solver
+test_channel_needs
+test_channel_page
+test_channel_people
+test_channel_plan
+test_review_pages

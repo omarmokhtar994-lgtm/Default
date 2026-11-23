@@ -1,0 +1,21 @@
+© 2026 Omar Mokhtar. All rights reserved.
+Phase BQ flood guard: rule written before any load run (2026-11-18).
+
+Setup: the website as production serves it (waitress, 8 threads, one process, ProxyFix as behind Caddy), made-up
+data. Two floods, 40 s each, both arms:
+  F1 "botnet": 200 bot threads, each with its own X-Forwarded-For address, each looping GET /login then POST /login
+     with a made-up wrong username (the most expensive thing a stranger can ask: scrypt).
+  F2 "one address": the same 200 bots all from one address.
+During each flood one signed-in staff member (made-up "Associate 01" style account) asks for the home page every
+0.5 s. Recorded: staff response times (median, p95, max), staff status codes, bot status codes.
+Arms: A = guard off (LIMITS None, as before Phase BQ); B = the defaults (600 per person, 1200 per address, 4 threads
+for people not signed in).
+
+Adopt B's defaults only if all hold:
+  1. In B, for both floods, every staff request answers 200 (no 429, no 503, no connection error).
+  2. In B, staff p95 is at most 1.0 s for both floods.
+  3. B's staff p95 is lower than A's for F1 (the guard must make a measured difference, not just add code).
+  4. Normal use check, no flood, guard on: one signed-in person with 5 tabs polling every 3 s plus one page view
+     every 2 s for 60 s gets no 429.
+If any fails, the defaults are not adopted; the result is recorded and the owner decides.
+This container is not the Oracle server: compare A with B, not with production numbers.

@@ -1,0 +1,39 @@
+SEALED: /tmp/sec_tmp/readonly-check-461co57_/package is owned by root; the website's account can read and run it, not change it.
+PASS  the website's own tests that sign in and read pages (read-only code)
+PASS  explicit compile without a cache prefix is refused (as the earlier server run found)
+PASS  an explicit compile of the engine's file with the cache prefix works and writes nothing into the code
+web test modules: 233 run, 231 passed, 2 failed; 0 wrote or tried to write into the code; 2 only tried to save a development screenshot under evidence/
+  development screenshot writer (not part of the website): test_ax_downloads
+  development screenshot writer (not part of the website): test_ax_merge_pick
+  FAILED test_ax_downloads: FAILED (errors=1)
+  FAILED test_ax_merge_pick: FAILED (errors=1)
+PASS  no website test wrote into the code folder
+FAIL  one real engine run (smallest example workbook, SMOKE, to the breaks) into a writable results folder
+e_status": null,
+      "canonical_metrics": null,
+      "metric_parity": null
+    }
+  }
+[09:52:08] DONE  NMG_SP_RC9_1_READY_FIXED  exit=2  wall=6.7s  (within budget)
+[09:52:08] scoring release gates
+case                     status                     G4     G5              G8          
+----------------------------------------------------------------------------------------
+NMG_SP_RC9_1_READY_FIXED PASS_DIAGNOSTICS_ONLY      NOT_AP NO_EVIDENCE     NO_EVIDENCE 
+
+NMG_SP_RC9_1_READY_FIXED:
+    gate 4 NOT_APPLICABLE         benchmark not reported by this run
+    gate 5 NO_EVIDENCE            run produced no active intervals; break stage never reached
+    gate 8 NO_EVIDENCE            independent validation not run
+
+RELEASE VERDICT NMG_SP_RC9_1_READY_FIXED: NOT_RELEASABLE - failed: gate 8 independent validation not run (NO_EVIDENCE) - no schedule: diagnostics-only run (SMOKE) - it checks the workbook and the hard rules and never builds a schedule; run QUICK or DEEP for one
+RELEASE VERDICT (run): NOT_RELEASABLE
+written: /tmp/sec_tmp/readonly-check-461co57_/results/_gate_report/RC9_2_1_RELEASE_GATE_REPORT.csv
+written: /tmp/sec_tmp/readonly-check-461co57_/results/_gate_report/RELEASE_VERDICT.json
+gates 2 and 9 are decided against evidence/RC9_1_BASELINE.json (consolidated RC9.1 metrics, before-break only). A case is only compared when its input sha256, active-interval count and target ratio all match the baseline row; otherwise it is reported as NOT_COMPARABLE rather than compared.
+
+
+
+results written: 19 files
+
+FAILED: ['one real engine run (smallest example workbook, SMOKE, to the breaks) into a writable results folder']
+EXIT 1

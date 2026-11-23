@@ -49,7 +49,10 @@ class NoBreakWhileAlone(unittest.TestCase):
         self.assertLessEqual(self.first_break([person("Associate 02", 15, (17.5, 19, 21.5))]), 14 * H)
 
     def test_nobody_comes_all_shift(self):
-        self.assertEqual(self.first_break([]), self.FIRST[0] * H)  # planned as the schedule has it
+        # Re-pinned (Phase AX, owner 2026-10-22: Plan channels prefers the usual shape): "planned normally" now means the first
+        # break goes 2 to 3.5 hours into the shift (this one starts at 10:00) and not where the schedule had it, 45 minutes in
+        first = self.first_break([])
+        self.assertTrue(12 * H <= first <= 13.5 * H, first)
 
 
 class NoShortStintBeforeABreak(unittest.TestCase):

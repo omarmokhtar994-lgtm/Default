@@ -138,7 +138,9 @@ class TheBreaks(unittest.TestCase):
     def test_when_no_break_can_move_inside_the_rules_the_breaks_are_kept_and_it_says_so(self):
         people = day_people()
         # one person on a break at a time: 16 people need 64 break slots between 08:00 and 22:00, which has 56
-        one_at_a_time = {**RULES, "max_concurrent": 1}
+        # re-pinned (Phase AY, owner, 2026-10-23: "ignore the cap"): the limit is a hard constraint only when the workbook's Break
+        # Concurrency Gate Mode is Fail; in Warn (the default) and Off the intervals decide (test_ay_cap_mode)
+        one_at_a_time = {**RULES, "max_concurrent": 1, "concurrency_mode": "fail"}
         plan = plan_day(people, setup(), one_at_a_time, WED)
         self.assertEqual(plan["breaks"], {p["name"]: [s for _, s, _ in p["breaks"]] for p in people})
         self.assertTrue(plan["note"].startswith("Breaks were kept as they are. "), plan["note"])
@@ -208,3 +210,36 @@ class TheLanguages(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheConsistencyTick(unittest.TestCase):
+    """Phase AY (owner, 2026-10-23): the tick keeps each person on as few channel changes as coverage allows.
+    Rule pre-registered in evidence/phase_ay/REQUESTS.md; off must give the plan it gave before."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.people = day_people()
+        cls.off = setup()
+        cls.on = setup()
+        cls.on["rules"] = dict(cls.on["rules"], consistent=True)
+        cls.plan_off = plan_day(cls.people, cls.off, RULES, WED, move_breaks=False)
+        cls.plan_on = plan_day(cls.people, cls.on, RULES, WED, move_breaks=False)
+        cls.s_off = score_day(cls.people, cls.plan_off, cls.off, WED, RULES)
+        cls.s_on = score_day(cls.people, cls.plan_on, cls.on, WED, RULES)
+
+    def test_on_changes_channel_less_often_than_off(self):
+        # the timed search varies by one or two moves from run to run, so the claim is a clear drop, not one move
+        self.assertLessEqual(self.s_on["moves"], self.s_off["moves"] * 0.75)
+
+    def test_on_stays_on_a_channel_for_a_couple_of_hours_not_an_hour_at_a_time(self):
+        # owner: "chat for an hour, back to voice for an hour, back to chat" should be "chat for 2 hours, then phone"
+        self.assertLessEqual(self.s_on["short_stretches"], self.s_off["short_stretches"] * 0.6)
+
+    def test_on_keeps_coverage_and_every_rule(self):
+        lost = sum(self.s_on["short"].values()) + self.s_on["language_short"] \
+            - sum(self.s_off["short"].values()) - self.s_off["language_short"]
+        self.assertLessEqual(lost, 0.5)
+        self.assertEqual(self.s_on["problems"], [])
+
+    def test_a_missing_flag_is_off(self):
+        self.assertFalse(self.off["rules"].get("consistent"))

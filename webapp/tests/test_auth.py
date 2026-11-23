@@ -6,6 +6,8 @@ password change on first login, lockout after repeated failures, disabled
 users, admin-only user management, CSRF on every form, hashed passwords,
 cookie flags, and the copyright line on the login page.
 """
+from datetime import date
+import contextlib
 import re
 import sqlite3
 import tempfile
@@ -21,7 +23,7 @@ TOKEN = re.compile(r'name="csrf_token" value="([^"]+)"')
 def make_app(**extra):
     data = Path(tempfile.mkdtemp())
     config = {"DATA_DIR": str(data), "SECRET_KEY": "test-secret", "TESTING": True, "HTTPS": False,
-              "START_WORKER": False}
+              "START_WORKER": False, "TODAY": date(2026, 10, 1)}  # Phase AY: Egypt's today, before the weeks the tests use
     config.update(extra)
     app = create_app(config)
     store = Store(data / "scheduler.db")
@@ -117,7 +119,7 @@ class Security(unittest.TestCase):
 
     def test_passwords_are_hashed(self):
         app, store = make_app()
-        with sqlite3.connect(store.path) as db:
+        with contextlib.closing(sqlite3.connect(store.path)) as db:             # "with sqlite3.connect" commits but does not close
             rows = db.execute("select password_hash from users").fetchall()
         for (value,) in rows:
             self.assertNotIn("pass", value)

@@ -1,0 +1,34 @@
+{"page_h": 2853, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "home", "status": 200}
+{"page_h": 3564, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day", "status": 200}
+{"page_h": 5671, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_board", "status": 200}
+{"page_h": 4232, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}, {"kind": "table", "sel": ".adh-t", "rows": 28, "h": 2074, "cols": 24, "within": ".panel"}, {"kind": "table", "sel": ".adh-t", "rows": 24, "h": 813, "cols": 10, "within": ".panel"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_adherence", "status": 200}
+{"page_h": 2600, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_cover", "status": 200}
+{"page_h": 1909, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_channels", "status": 200}
+{"page_h": 2261, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_replan", "status": 200}
+{"page_h": 4813, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_bulk", "status": 200}
+{"page_h": 2851, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_rescue", "status": 200}
+{"page_h": 2976, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 290, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "day_meeting", "status": 200}
+{"page_h": 1376, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "overview", "status": 200}
+{"page_h": 900, "long": [], "noicon": [], "page": "wallboard", "status": 200}
+{"page_h": 984, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "handover", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "split", "status": 200}
+{"page_h": 9257, "long": [{"kind": "table", "sel": ".wkgrid", "rows": 24, "h": 1035, "cols": 24, "within": ".panel"}, {"kind": "table", "sel": ".runs.small", "rows": 148, "h": 5529, "cols": 14, "within": ".panel"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "week", "status": 200}
+{"page_h": 1023, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "schedules", "status": 200}
+{"page_h": 1781, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "run", "status": 200}
+{"page_h": 3888, "long": [{"kind": "table", "sel": ".edgrid", "rows": 39, "h": 1826, "cols": 16, "within": ".panel"}, {"kind": "list", "sel": "", "rows": 184, "h": 11433, "within": ".log-each"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "run_schedules", "status": 200}
+{"page_h": 1590, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "requests", "status": 200}
+{"page_h": 2722, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "incidents", "status": 200}
+{"page_h": 2658, "long": [{"kind": "table", "sel": ".adh-t.ins-t", "rows": 8, "h": 344, "cols": 12, "within": ".panel"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "shrinkage", "status": 200}
+{"page_h": 1475, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "notifications", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "programs", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "program", "status": 404}
+{"page_h": 1942, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "exports", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "team", "status": 200}
+{"page_h": 2382, "long": [{"kind": "table", "sel": ".people", "rows": 7, "h": 1006, "cols": 10, "within": "#main"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "admin_users", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "admin_bulk", "status": 200}
+{"page_h": 1341, "long": [{"kind": "table", "sel": ".actable", "rows": 14, "h": 641, "cols": 8, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "roles", "status": 200}
+{"page_h": 1228, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "setup_with", "status": 200}
+{"page_h": 2341, "long": [{"kind": "table", "sel": ".actable", "rows": 39, "h": 1716, "cols": 12, "within": ""}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "setup_channels", "status": 200}
+{"page_h": 3158, "long": [{"kind": "table", "sel": ".shr-t", "rows": 8, "h": 410, "cols": 8, "within": ".setup-defaults"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "setup_programs", "status": 200}
+{"page_h": 1944, "long": [{"kind": "table", "sel": ".coach-t", "rows": 24, "h": 1170, "cols": 16, "within": ".panel"}], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "coach", "status": 200}
+{"page_h": 948, "long": [], "noicon": ["/shrinkage?program=SAKS+NMG+Tier+2", "/incidents?program=SAKS+NMG+Tier+2"], "page": "password", "status": 200}

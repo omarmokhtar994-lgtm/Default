@@ -33,7 +33,12 @@ class TheWebWorkbooks(unittest.TestCase):
     def test_example_reads_like_its_synthetic_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             fresh = Path(tmp) / "fresh.xlsx"
-            self.assertEqual(B.main(["build", str(SOURCE), str(fresh)]), 0)  # the builder's own engine check
+            # Re-pinned in Phase AO (owner, 2026-10-21: an 11-hour shift gets four breaks, in the input sheet the website
+            # offers): the Example carries the Instructions row "Break Set For Shifts Of 11 Hours Or More = 15, 30, 15, 15"
+            # that its source does not, so it is rebuilt from the source with that one row added. Every other setting,
+            # shift and number is still compared with the source's reading.
+            source = W.offer_long_shift_breaks(SOURCE, Path(tmp) / "source_with_long_breaks.xlsx")
+            self.assertEqual(B.main(["build", str(source), str(fresh)]), 0)  # the builder's own engine check
             self.assertEqual(B.engine_reading(EXAMPLE), B.engine_reading(fresh))
 
     def test_example_passes_the_input_check(self):
@@ -74,6 +79,64 @@ class TheWebWorkbooks(unittest.TestCase):
         self.assertIn(value["Count of Associates"], (None, ""))
         self.assertEqual((str(value["Interval Minutes"]), value["Requirements Source"], value["Shrinkage Source"]),
                          ("30", "FT Wise 30 Min", "Shrinkage 30 Min"))
+
+
+class TheBreakConcurrencyRows(unittest.TestCase):
+    """Phase AY (owner, 2026-10-23: the limit on people on a break at once was invisible; "edit the default download sheet to include that
+    option"): with no row the engine silently uses 4 at a time and 30% of the people on shift (measured: a blank or empty cell
+    gives the same, 0 gives the smallest, 1 and 5%). The visible Instructions sheet now carries the three rows in its Breaks group,
+    showing those defaults and the gate mode Warn, so nothing changes until someone edits them. Warn counts an excess as a cost,
+    Fail forbids it, Off lifts the limit. They used to sit on the hidden Engine Defaults sheet."""
+    ROWS = ("Maximum Concurrent Breaks", "Maximum Concurrent Break Ratio", "Break Concurrency Gate Mode")
+
+    def rows(self, path):
+        ws = load_workbook(path)["Instructions"]
+        return {r[1].value: (r[2].value, r[3].value) for r in ws.iter_rows() if r[1].value}
+
+    def test_both_workbooks_offer_the_three_rows(self):
+        for path in (BLANK, EXAMPLE):
+            found = self.rows(path)
+            for label in self.ROWS:
+                self.assertIn(label, found, f"{path.name}: {label}")
+
+    def test_the_rows_show_the_engine_defaults_so_nothing_changes_until_someone_edits_them(self):
+        # the template builder writes a blank row's engine default into the cell: 4 at a time, 30%, Warn
+        for path in (BLANK, EXAMPLE):
+            found = self.rows(path)
+            self.assertEqual(found["Maximum Concurrent Breaks"][0], 4, path.name)
+            self.assertEqual(found["Maximum Concurrent Break Ratio"][0], 0.3, path.name)
+            self.assertEqual(found["Break Concurrency Gate Mode"][0], "Warn", path.name)
+
+    def test_each_row_says_what_blank_and_each_choice_means(self):
+        found = self.rows(EXAMPLE)
+        self.assertRegex(found["Maximum Concurrent Breaks"][1], r"(?i)blank = 4")
+        self.assertRegex(found["Maximum Concurrent Break Ratio"][1], r"(?i)blank = 30%")
+        mode = found["Break Concurrency Gate Mode"][1]
+        for word in ("Warn", "Fail", "Off"):
+            self.assertIn(word, mode)
+
+    def test_they_are_on_the_visible_instructions_sheet_and_not_also_on_the_hidden_one(self):
+        for path in (BLANK, EXAMPLE):
+            wb = load_workbook(path)
+            self.assertEqual(wb["Instructions"].sheet_state, "visible")
+            hidden = {r[1].value for r in wb["Engine Defaults"].iter_rows() if r[1].value}
+            for label in self.ROWS:
+                self.assertNotIn(label, hidden, f"{path.name}: {label} is also on the hidden sheet")
+
+    def test_the_gate_mode_is_a_dropdown_of_warn_fail_off(self):
+        ws = load_workbook(EXAMPLE)["Instructions"]
+        row = next(r[2].row for r in ws.iter_rows() if r[1].value == "Break Concurrency Gate Mode")
+        listed = [dv.formula1 for dv in ws.data_validations.dataValidation if dv.type == "list" and f"C{row}" in str(dv.sqref)]
+        self.assertEqual(listed, ['"Warn,Fail,Off"'])
+
+    def test_the_engine_reads_the_same_limits_as_before(self):
+        import l632_universal_scheduler as E
+        for path in (BLANK, EXAMPLE):
+            if path is BLANK:
+                continue  # the blank has no people to parse; the rows above are what it adds
+            parsed = E.parse_input(path)
+            self.assertEqual((parsed.break_max_concurrent_absolute, parsed.break_max_concurrent_ratio,
+                              parsed.break_concurrency_gate_mode), (4, 0.3, "warn"))
 
 
 if __name__ == "__main__":

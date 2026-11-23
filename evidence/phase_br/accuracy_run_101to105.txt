@@ -1,0 +1,22 @@
+Seeds 101 to 105; each figure is the mean over the five seeds.
+
+R1, interval shape: WAPE % against the known expected counts
+       history  M (today)     A mean   P pooled
+         1,500      13.92      12.22      12.26
+         7,000       6.23       5.41       5.40
+        35,000       2.68       2.38       2.38
+       200,000       1.14       1.04       1.04
+   drift 7,000       7.24       6.40       6.37
+  A: lower than M on 5 of 5; largest excess -0.11 points; mean 5.49 (M 6.24)
+  P: lower than M on 5 of 5; largest excess -0.11 points; mean 5.49 (M 6.24)
+
+R2, people needed per interval: error % against the needs with the true counts and true handle time
+               history  one handle time  H by interval
+         1,500 varying            12.66          12.18   H lower (-0.48)
+         7,000 varying             8.78           6.23   H lower (-2.56)
+        35,000 varying             8.31           3.40   H lower (-4.92)
+       200,000 varying             7.94           1.53   H lower (-6.41)
+            1,500 flat            10.41          11.35   H not lower (+0.94)
+            7,000 flat             4.86           6.45   H not lower (+1.59)
+           35,000 flat             2.55           3.61   H not lower (+1.06)
+          200,000 flat             1.17           1.53   H not lower (+0.36)

@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- © 2026 Omar Mokhtar. All rights reserved. -->
+<html lang="en"><head><meta charset="utf-8"><title>Sample ap01: merged LOBs, channel hours, daily download</title>
+<style>
+body{font:14px system-ui,sans-serif;margin:24px;background:var(--bg);color:var(--ink)}
+body.light{--bg:#F1F2F4;--ink:#1B1F24;--panel:#fff;--rail:#d6d9de;--dim:#59616b;--a:#3987e5;--b:#8f6bd6;--req:#1B1F24;--warn:#9a5b00;--chip:#e8ebef}
+body.dark{--bg:#111418;--ink:#E8EAED;--panel:#191D22;--rail:#3a4048;--dim:#98A2AF;--a:#5aa0f0;--b:#a58cf0;--req:#E8EAED;--warn:#F2A93B;--chip:#252a31}
+.opt{background:var(--panel);border:1px solid var(--rail);border-radius:8px;padding:14px 16px;margin:0 0 18px;max-width:1000px}
+h2{font-size:17px;margin:0 0 4px}h3{font-size:14px;margin:12px 0 4px}p{margin:0 0 10px;font-size:13px;color:var(--dim)}
+.sel{display:flex;flex-wrap:wrap;gap:14px;align-items:end;margin:8px 0}
+.sel label{display:flex;flex-direction:column;font-size:12px;color:var(--dim);gap:3px}
+.sel .box{border:1px solid var(--rail);border-radius:6px;padding:6px 10px;color:var(--ink);font-size:13px;background:var(--bg)}
+.seg{display:inline-flex;border:1px solid var(--rail);border-radius:6px;overflow:hidden}
+.seg span{padding:6px 12px;font-size:13px;border-right:1px solid var(--rail)}.seg span:last-child{border:0}
+.seg .on{background:var(--ink);color:var(--bg)}
+.tiles{display:flex;gap:12px;margin:10px 0}.tile{border:1px solid var(--rail);border-radius:6px;padding:8px 12px;min-width:120px}
+.tile b{display:block;font-size:20px}.tile small{color:var(--dim)}
+svg{width:100%;max-width:960px;height:190px;display:block}
+.key{display:flex;gap:16px;font-size:12px;margin:6px 0;color:var(--dim)}.key i{display:inline-block;width:18px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+table{border-collapse:collapse;font-size:13px;width:100%}th,td{border-bottom:1px solid var(--rail);padding:5px 8px;text-align:right}th:first-child,td:first-child{text-align:left}
+tfoot td{font-weight:700}.chip{display:inline-block;border-radius:10px;padding:1px 8px;font-size:11px;background:var(--chip);margin-left:6px}
+.chip.a{border:1px solid var(--a)}.chip.b{border:1px solid var(--b)}
+.btn{display:inline-block;border:1px solid var(--ink);border-radius:6px;padding:6px 12px;font-size:13px}
+.note{border-left:3px solid var(--warn);padding:4px 10px;margin:8px 0;font-size:12px;color:var(--ink)}
+</style></head><body class="light">
+<div id="out"></div>
+<script>
+const D=document.getElementById('out');
+const mk=()=>{
+ // made-up data: Program A, LOB 1 (London) and LOB 2 (Cairo), shown in Cairo time
+ const hrs=[8,9,10,11,12,13,14,15,16,17,18,19];
+ const l1=[3,5,7,8,8,7,6,5,4,3,2,1], l2=[1,2,3,4,5,6,6,6,5,5,4,3], req=[5,8,11,13,14,14,13,12,10,9,7,5];
+ let bars='',lines='';const W=960,H=190,bw=W/12-8,mx=16;
+ hrs.forEach((h,i)=>{const x=i*(W/12)+4,h1=l1[i]/mx*150,h2=l2[i]/mx*150;
+  bars+=`<rect x="${x}" y="${170-h1}" width="${bw}" height="${h1}" fill="var(--a)"/><rect x="${x}" y="${170-h1-h2}" width="${bw}" height="${h2}" fill="var(--b)"/><text x="${x+bw/2}" y="185" font-size="10" text-anchor="middle" fill="var(--dim)">${h}:00</text>`;
+  lines+=(i?'L':'M')+(x+bw/2)+' '+(170-req[i]/mx*150)+' ';});
+ const chart=`<svg viewBox="0 0 960 190" role="img" aria-label="Staffed by LOB stacked, requirement line">${bars}<path d="${lines}" fill="none" stroke="var(--req)" stroke-width="2" stroke-dasharray="5 3"/></svg>
+ <div class="key"><span><i style="background:var(--a)"></i>LOB 1 staffed</span><span><i style="background:var(--b)"></i>LOB 2 staffed</span><span><i style="background:none;border-top:2px dashed var(--req);height:0"></i>Requirement (LOB 1 + LOB 2)</span></div>`;
+ const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],ch={Phone:[62,60,64,61,58,30,24],Chat:[40,42,41,39,40,22,18],Email:[24,24,26,25,22,10,8]};
+ const sum=a=>a.reduce((x,y)=>x+y,0);
+ const tbl=`<table><thead><tr><th>Scheduled hours</th>${days.map(d=>`<th>${d}</th>`).join('')}<th>Week</th></tr></thead><tbody>${Object.entries(ch).map(([k,v])=>`<tr><td>${k}</td>${v.map(n=>`<td>${n}</td>`).join('')}<td><b>${sum(v)}</b></td></tr>`).join('')}</tbody>
+ <tfoot><tr><td>All channels</td>${days.map((d,i)=>`<td>${ch.Phone[i]+ch.Chat[i]+ch.Email[i]}</td>`).join('')}<td>${sum(ch.Phone)+sum(ch.Chat)+sum(ch.Email)}</td></tr></tfoot></table>`;
+ D.innerHTML=`
+<div class="opt"><h2>A. The picker on the RTA, Week and Schedules pages</h2>
+<p>One new choice next to Program. "Merged" lists only LOBs of the same program. The zone is the one picked in "Times in".</p>
+<div class="sel"><label>Program<span class="box">Program A ▾</span></label>
+<label>View<span class="seg"><span>LOB 1</span><span>LOB 2</span><span class="on">LOB 1 + LOB 2 (merged)</span></span></label>
+<label>Day<span class="box">Tue 20 Oct</span></label><label>Times in<span class="box">Cairo ▾</span></label><label>Day starts at<span class="box">08:00 ▾</span></label></div></div>
+
+<div class="opt"><h2>B. The merged day on the RTA (one requirement, one actual, one shrinkage)</h2>
+<p>LOB 1 is uploaded in London time and LOB 2 in Cairo time; both are shown on the picked clock.</p>
+<div class="tiles"><div class="tile"><small>Requirement</small><b>131</b><small>staff-hours</small></div><div class="tile"><small>Staffed now</small><b>12</b><small>LOB 1: 5, LOB 2: 7</small></div><div class="tile"><small>Shrinkage today</small><b>11.4%</b><small>both LOBs</small></div><div class="tile"><small>Coverage</small><b>94%</b><small>of the requirement</small></div></div>
+${chart}
+<h3>People on the floor</h3><table><thead><tr><th>Name</th><th>Shift</th><th>Now</th></tr></thead><tbody>
+<tr><td>Associate 01<span class="chip a">LOB 1</span></td><td>08:00 to 17:00</td><td>Phone</td></tr>
+<tr><td>Associate 14<span class="chip b">LOB 2</span></td><td>10:00 to 19:00</td><td>Break</td></tr>
+<tr><td>Associate 22<span class="chip b">LOB 2</span></td><td>09:00 to 18:00</td><td>Chat</td></tr></tbody></table>
+<p class="note">Edits made on the merged view (a break, an absence, overtime) are saved on the person's own LOB, so each LOB's schedule and exports stay correct. A cover offer can use anyone of either LOB who can cover the channel.</p></div>
+
+<div class="opt"><h2>C. Hours per channel per day, and the week</h2>
+<p>On the RTA tab (day column, plus the week) and on the Schedules tab. Works for one LOB or merged. Download as CSV from Exports.</p>${tbl}</div>
+
+<div class="opt"><h2>D. Daily view per associate, downloaded from the RTA</h2>
+<p>Same layout as the daily view an associate sees today (shift, breaks, lunch, aux), taken after the day's changes. One file per associate, or one workbook with a sheet each.</p>
+<div class="sel"><label>For<span class="seg"><span class="on">Everyone on this view</span><span>Pick associates</span></span></label><label>Format<span class="seg"><span class="on">One workbook, sheet each</span><span>Zip of one file each</span></span></label><span class="btn">Download daily views</span></div>
+<p class="note">Includes overtime, VTO, absences and moved breaks set on the RTA that day. Times follow the zone picked.</p></div>`;
+};
+mk();
+if(location.hash==='#dark'){document.body.className='dark'}
+</script></body></html>

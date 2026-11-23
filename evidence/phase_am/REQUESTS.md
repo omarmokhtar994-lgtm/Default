@@ -1,0 +1,99 @@
+# Phase AM: the owner's requests
+
+© 2026 Omar Mokhtar. All rights reserved.
+
+Received Fri 16 Oct 2026, about 01:15 Egypt time, with two photos: the Weeks page's Hours needed table, and Home's Runs
+list with "no data" under Covered.
+
+## The owner's words
+
+> Couple of notes for schedule rescheduling in RTA view should be a button such as fix breaks etc 1 click fix things,
+>
+> When changing timezone in schedules tab it's working fine now but not downloadable with the new timezone
+>
+> In weeks tab for As planned i dont have the option to choose after break or before break or a different version
+>
+> In this view and weeks and all views not showing percentage of intervals if it's only before breaks
+>
+> A it should show the percentage
+> B in cas i pressed on plan breaks it should show the new percentage after breaks or as per my in use selection
+
+## 1. One click to fix the channels on the RTA (question)
+
+The owner, the same night: "First point was related to channel for the button".
+
+What exists:
+- On the RTA's Channels tab, each channel warning ("Phone short 14:00 to 15:00") lists its own fixes, each with
+  "Apply". The fixes are: a channel change for someone, moving the aux that caused it, or moving a break. One click
+  fixes one warning.
+- Fix the day's breaks and Rescue the day fix the whole day in one click, but only for breaks.
+- Plan channels (on a schedule) plans a whole day with the channel planner, but only for the schedule, not the RTA's
+  day.
+
+Questions:
+1. **What does the one button do?**
+   - (a) Applies each warning's first fix in turn, in one click, and lists what it could not fix.
+   - (b) Re-plans everyone's channels from now to the end of the 24 hours with the channel planner, for people on
+     shift and present, to cover every channel and language. It shows the changes first, then one Apply, then one
+     Undo (recommended: it can solve warnings that no single change solves).
+2. **Breaks:** channels only (recommended), or may it also move breaks that have not started, as "Move breaks if it
+   helps" does on Plan channels?
+3. **Fairness:** coverage first, then use the fairness you set (each person's share closer to even, no one stuck on
+   one channel) to choose between plans that cover the same (recommended), or ignore fairness here for now?
+
+## 2. Download in the zone picked (bug)
+
+**Root cause:** the Download (.xlsx) link on a schedule (`schedules.html`) carries no zone. `schedule_download`
+sends the stored workbook unchanged, always in the schedule's own zone.
+
+**Fix (TDD):** with "Times in" set to another zone, Download gives a copy whose shift and break times are moved to
+that zone. The file name says the zone. A shift that starts the day before or the next day stays in its own day's
+column, marked as on the page ("(day before)"). Ruling: this matches what the page shows. Cost if wrong: a layout
+change in the copy.
+
+## 3. Weeks: choose which version "As planned" shows (feature)
+
+**What exists:**
+- The Weeks page's grid reads the figures the engine kept for the run.
+- "As planned" in Hours needed reads the version in use, or the newest one.
+- Neither lets you pick "Tool, after breaks", "Tool, before breaks", "Tool, more consistent" or an edited version.
+
+**Fix:** a "Version" pick on the Weeks page, listing that week's versions (the one in use first). It sets both the grid
+and Hours needed's "As planned". Each version is labelled with whether its breaks are planned. The RTA and "As
+recorded" keep following the version in use.
+
+## 4. Percentages when a schedule has only before-break times (bug)
+
+**Root cause:**
+- Home's Runs list ("Covered") and the Weeks grid read an engine run's figures only from the engine's own check of
+  its after-breaks workbook. A run made with "Before breaks only" has no such check, so they show "no data" and an
+  empty grid.
+- Every kept version has its own check with full interval figures: a before-breaks version too, where the figures are
+  the floor with no breaks. Measured on the B1 before-breaks fixture: 112 of 112 intervals. The website reads those
+  only for uploaded ready schedules.
+- So planning breaks (a new version) or setting a version in use never changes those figures for an engine run.
+
+**Fix (TDD):**
+- **A:** Runs list, Weeks and the run's page read the version in use. With none in use, they read the version the
+  Schedules list shows for that run, which is the engine's figures for a full run, as now. A version with no breaks
+  yet says "before breaks".
+- **B:** after "Plan breaks" saves a version with breaks, setting it in use (or it being the one shown) brings its
+  after-breaks percentage everywhere.
+
+Question:
+4. With no version in use, should Home and Weeks show the **newest version with breaks** (so a "Plan breaks" result
+   shows at once), or **only the version in use** (recommended: the one in use; with none in use, the engine's own,
+   as now)?
+
+## The owner's answers (Fri 16 Oct 2026, about 01:40 Egypt time)
+
+> 1- B / 2- follow recommendation / 3- recommended as well / 4 recommended as well
+
+- One click on the RTA's Channels tab: re-plan everyone's channels from now to the end of the 24 hours with the
+  channel planner, for people on shift and present. The changes show first; then one Apply and one Undo.
+- Channels only: breaks are not moved.
+- Coverage first. Between plans that cover the same, fairness decides: shares closer to even, no one stuck on one
+  channel.
+- With no version in use, Home and Weeks read the engine's own figures, as now. Ruling: when the engine has none (a
+  "Before breaks only" run), they read the run's shown version, so a percentage always shows (the owner's A). Cost if
+  wrong: one fallback.

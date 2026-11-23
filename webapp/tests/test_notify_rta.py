@@ -69,16 +69,16 @@ class TheTick(_Rta):
         self.assertIn('<input type="hidden" name="post_asked" value="1">', add)
 
     def test_the_tick_leaves_one_change_out(self):
-        self.client.post("/day/add", data=self.form(associate="Associate 037", what="VTO", **{"from": "10:00"},
-                                                    minutes="60", view="board", post_asked="1"))
+        # re-pinned (Phase AY, owner: "remove VTO option"): the three changes were VTOs; they are overtime after the shift now, for three people
+        def overtime(name, minutes, **more):
+            self.client.post("/day/add", data=self.form(associate=name, what="Overtime", side="after", minutes=minutes, view="board", **more))
+        overtime("Associate 001", "60", post_asked="1")
         item = self.items()[0]
-        self.assertEqual((item["text"], item["status"], item["reason"]),
-                         ("VTO 10:00 to 11:00", "skipped", "left out on the RTA"))
-        self.client.post("/day/add", data=self.form(associate="Associate 037", what="VTO", **{"from": "12:00"},
-                                                    minutes="30", view="board", post_asked="1", post="1"))
-        self.assertEqual((self.items()[0]["text"], self.items()[0]["status"]), ("VTO 12:00 to 12:30", "waiting"))
-        self.client.post("/day/add", data=self.form(associate="Associate 037", what="VTO", **{"from": "14:00"},
-                                                    minutes="30", view="board"))  # an older page without the tick
+        self.assertRegex(item["text"], r"^Overtime \d\d:\d\d to \d\d:\d\d$")
+        self.assertEqual((item["status"], item["reason"]), ("skipped", "left out on the RTA"))
+        overtime("Associate 006", "30", post_asked="1", post="1")
+        self.assertEqual(self.items()[0]["status"], "waiting")
+        overtime("Associate 007", "30")  # an older page without the tick
         self.assertEqual(self.items()[0]["status"], "waiting")
 
     def test_the_break_dialog_sends_the_tick(self):

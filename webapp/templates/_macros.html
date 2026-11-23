@@ -1,5 +1,16 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 
+{# Phase BC: the choice between scrolling panels and whole lists for every scrolling panel on a page (hidden until the script runs) #}
+{% macro list_mode() -%}
+<div class="tl-view" data-list-mode hidden><span id="lm-h" class="tl-view-h">Lists</span><span class="looks tl-modes" role="group" aria-labelledby="lm-h"><button type="button" class="look" data-list-mode-set="scroll" aria-pressed="true">Scrolling panels</button><button type="button" class="look" data-list-mode-set="whole" aria-pressed="false">Whole lists</button></span></div>
+{%- endmacro %}
+
+{# a shift cell's text: a clock-change warning is a short label under the time; the full words are in the note under the table #}
+{% macro shift_text(shown) -%}
+{%- set cut = shown.split(' (invalid source clock time: ', 1) -%}
+{{ cut[0] }}{% if cut|length > 1 %}<span class="ed-warn" title="{{ cut[1].rstrip(')') }}">Clocks change</span>{% endif %}
+{%- endmacro %}
+
 {% macro stagebar(run, small=False) -%}
 <ol class="stagebar{% if small %} small{% endif %}" aria-label="Progress: {{ label(run) }}" data-run="{{ run.id }}">
 {%- for name, state in stages(run) %}<li class="{{ state }}"><span>{{ name }}</span></li>{% endfor -%}

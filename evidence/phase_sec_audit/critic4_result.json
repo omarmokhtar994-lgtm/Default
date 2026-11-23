@@ -1,0 +1,17 @@
+{
+ "missing_units": [],
+ "reassign_ids": [],
+ "stop": true,
+ "unreviewed_files": [
+  "deploy/ORACLE_SETUP_GUIDE.md",
+  "webapp/DESIGN.md",
+  "webapp/NOTICE",
+  "webapp/__init__.py",
+  "webapp/routes/__init__.py",
+  "webapp/static/LICENSE-phosphor",
+  "webapp/static/fonts/OFL",
+  "webapp/static/fonts/archivo.woff2",
+  "webapp/static/fonts/atkinson-hyperlegible-next.woff2"
+ ],
+ "notes": "Every Python module, route file, template, CSS/JS file and deploy script in scope appears in at least one unit's reviewed_paths. The nine files no unit reviewed are inert (docs, licences, two binary fonts, two empty package init files). The wave-3 item was closed by wave 4. Remaining value low."
+}

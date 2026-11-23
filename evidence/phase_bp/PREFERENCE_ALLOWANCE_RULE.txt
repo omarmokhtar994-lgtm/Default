@@ -1,0 +1,57 @@
+Phase BP: shift Preferences may cost a little coverage (pre-registered rule, written before the code)
+Owner, 2026-11-12: the asked shift is not given though people are available (a), and the "closer to preferences" version is missing or not in
+use (c); a preference may cost coverage "not that much, maybe 1-2% maximum".
+
+What was measured first (scratch runs, whole engine, 300 s, made-up agents)
+- 12 people asking the shift demand needs anyway: 60 of 60 honoured. Requests in random order plus three one-day requests: 59 of 60; the one
+  missed costs coverage. PREFERENCE_SWAP_POLISH made 0 swaps in both, so no PREFERENCE_CANDIDATE was published.
+- Cause of (a) and (c): after Stage 1 the only preference step is a same-day swap between two people where neither ends further from the
+  request and no guarded measure moves. One person cannot be moved to the asked shift alone, even when that costs nothing, and any cost is refused.
+
+The change (engine/_tools/l632_universal_scheduler.py, preference_swap_polish; nothing else in the engine)
+1. After the swaps, one associate's worked day may be MOVED to the asked shift when: the asked shift is a legal shift of the same length; the
+   cell is not a Fixed request and the person is not nested; the row rules and the cell rules the swap already uses hold; employee quality is
+   no worse; the pair stays in the same candidate class with no more hard failures. The break pattern stays with the person-day.
+2. Free moves first: a move is kept when no guarded measure is worse (the swap's own guard).
+3. Then moves inside the allowance, cheapest first. PREFERENCE_COVERAGE_ALLOWANCE = 0.02 (the owner's maximum). Against the SELECTED schedule,
+   cumulatively over all kept moves:
+   - every guarded higher-is-better coverage count (after/before target, floor, 100, 90, 80, week boundary) may be lower by at most
+     floor(0.02 x the selected schedule's value);
+   - every guarded lower-is-better measure (gaps, zero-staffed quarters, language and opening gaps, break concurrency, split gaps, violations)
+     stays no worse, except the overage measures (names containing "overage"): a moved person is surplus where they land, which is the cost
+     the owner accepted, and shortage is already bounded by the line above.
+4. The selected schedule is still never rewritten (F-35). The result is published as PREFERENCE_CANDIDATE with its cost in the audit record
+   (moves, allowance, each measure that fell and by how much). The runner offers it when the independent validator's numbers are inside the
+   same allowance, and its text says what it costs instead of "same coverage".
+5. Use Preferences = No turns the whole step off, as before. allowance = 0 gives the old strict behaviour plus free moves.
+
+Acceptance (A/B: engine before the change against after, same seed 9000, 2 workers, same time limit)
+- Shipped workbooks (no shift Preferences in any): selected schedule and every published file identical in content; no PREFERENCE_CANDIDATE.
+- Protected RC9.1 baseline workbooks and engine/regression_assets: untouched bytes.
+- Toy with one-day requests (59 of 60 today): the candidate honours more requests than the selected schedule, every higher-is-better count is
+  within floor(2%) of the selected schedule's, no lower-is-better non-overage measure is worse, independent validation PASS.
+- Toy where everything is honoured already: no candidate, selected schedule identical.
+- Gate: run_tests.sh green with the minimum raised by the new tests.
+If any line fails, the change is not shipped.
+
+Not decided here (the owner's): whether the website should put the preference version in use by itself. It stays offered, one click to use.
+
+Amendment before the third toy was run (2026-11-12, after the first two after-arm runs)
+- Toy 1 (all honoured already): after-arm 60 of 60, no candidate. Acceptance line met.
+- Toy 2 (one-day requests three hours from the worked shift): after-arm selected 59 of 60, 0 swaps, 0 moves, no candidate. The missed request
+  costs three hourly intervals, about 4% of the week's, so the rule refuses it. The acceptance line "the candidate honours more requests" is
+  NOT met on this toy; the refusal is what the 2% rule says, so the toy does not test the allowance.
+- Toy 3 is added to test it, written before it is run: the same week, the three one-day requests are one hour from the weekly request. Arms:
+  the engine at the commit before Phase BP, and the engine after. Pass: when the after-arm's selected schedule misses a request that the
+  before-arm also has no candidate for, the after-arm publishes a PREFERENCE_CANDIDATE that honours more requests, validated PASS, with every
+  coverage count inside floor(2%) and no gap count higher. If the selected schedule already honours everything, toy 3 proves nothing either
+  and the result is reported as such, not as a pass.
+
+Second amendment, before toy 4 was run (2026-11-12)
+- Toy 3 result: both arms' selected schedules honour 58 of 60 and miss the same two requests; neither arm has a candidate. The after-arm tried
+  both and its record says why they were refused: one by a row or cell rule; the other would open a severe floor gap (only two people cover
+  each shift, so one person an hour later leaves that hour at 50%, under the 80% floor). The rule never allows a new gap, so this is the rule
+  working, and toys 2 and 3 are too thin (two people per shift) to test the allowance. The pre-registered pass is NOT met on toy 3.
+- Toy 4, written before it is run: the same staircase with six people per shift (36 people, demand six per shift), each asks the shift of
+  their group all week, and three people ask one hour later on Wednesday. One person away leaves an edge hour at 5 of 6 (83%, above the
+  floor). Arms and pass condition as for toy 3. If it is not met, Phase BP's engine step is not shipped.

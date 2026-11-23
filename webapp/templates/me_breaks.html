@@ -1,0 +1,91 @@
+{# © 2026 Omar Mokhtar. All rights reserved. #}
+{% extends "base.html" %}{% block title %}My day on Team Scheduler{% endblock %}
+{% block content %}
+<div class="phead"><div>
+  <h1>My day</h1>
+  <p class="byline">{{ user.roster_name }}{% if today %}, {{ today.strftime('%A %d %b') }}{% endif %}. You can ask the RTA to move a break on the day you are working, up to the end of your shift. The RTA decides.</p>
+</div></div>
+{% set here = 'today' %}{% include "_me_tabs.html" %}
+{% if zone_words() %}<p class="note">{{ zone_words() }}</p>{% endif %}
+{% include "_news.html" %}
+{% if not requests_on %}<p class="note panel" role="note">Break change requests are switched off for this program. Ask your team manager or the RTA.</p>{% endif %}
+{% if problem %}<p class="error" role="alert">{{ problem }}</p>{% endif %}
+
+{% if not unit %}
+<p class="empty panel">Your name is not on a schedule yet, so there is nothing to show.</p>
+{% else %}
+{% macro day_card(card, heading, hid) %}
+<section class="panel me-today" aria-labelledby="{{ hid }}">
+  <h2 id="{{ hid }}">{{ heading }}</h2>
+  {% if card %}
+  <b class="me-shift">{{ card.label }}</b>
+  {% set span = card.end - card.start %}
+  <svg class="me-band" viewBox="0 0 {{ span }} 12" preserveAspectRatio="none" role="img" aria-label="Your shift, part by part">{% for p in card.band %}<rect class="b-{{ p.kind }}" x="{{ p.lo - card.start }}" y="0" width="{{ p.hi - p.lo }}" height="12" rx="2"><title>{{ (p.what or 'Working')|capitalize }}, {{ hm(p.lo) }} to {{ hm(p.hi) }}</title></rect>{% endfor %}</svg>
+  <p class="me-ends"><span>{{ hm(card.start) }}</span><span>{{ hm(card.end) }}</span></p>
+  {% if card.status != 'Present' %}<p class="me-said">Recorded today: {{ card.status|lower }}.</p>{% endif %}
+  <p class="me-said">{{ card.said }}</p>
+  {% else %}<p class="me-said">You do not work today.</p>{% endif %}
+</section>
+{% endmacro %}
+{% if running %}{{ day_card(running, 'Your shift now, started ' ~ found.on.strftime('%A %d %b'), 'now-h') }}
+{% if card %}{{ day_card(card, 'Later today, ' ~ today.strftime('%A'), 'today-h') }}{% endif %}
+{% else %}{{ day_card(card, 'Today, ' ~ today.strftime('%A'), 'today-h') }}{% endif %}
+{% endif %}
+{% if not unit %}
+{% elif not found %}
+<p class="empty panel">You have no shift running or still to come today, so there is no break to change.</p>
+{% else %}
+<section class="panel" aria-labelledby="shift-h">
+  <h2 id="shift-h">Your breaks, {{ found.label }}{% if found.on != today %} (started {{ found.on.strftime('%a %d %b') }}){% endif %}</h2>
+  <table class="runs small">
+    <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Now</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
+    <tbody>{% for b in seg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.planned_start) }}</td><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>
+      <td>{% if b.start >= now_at %}{% if requests_on %}<a href="{{ url_for('me_breaks', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Not on</span>{% endif %}{% else %}<span class="dim">Started</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+{% endif %}
+
+{% if options %}
+<section class="panel" id="change" aria-labelledby="change-h">
+  <h2 id="change-h">Move {{ options.kind }}{% if options.day %} tomorrow{% endif %} (now {{ hm(options.current) }}, {{ options.minutes }} minutes)</h2>
+  <p class="note">Each time shows how much spare cover that interval has without you. <span class="lv lv-high">High buffer</span> and <span class="lv lv-moderate">Moderate buffer</span> are most likely approved. <span class="lv lv-low">Low buffer</span> is most likely rejected: there is nobody to spare.</p>
+  <form method="post" action="{{ url_for('me_breaks_ask') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="idx" value="{{ options.picked }}">{% if options.day %}<input type="hidden" name="day" value="{{ options.day }}">{% endif %}
+    <fieldset class="slots"><legend>Pick a time</legend>
+      {% for c in options.choices %}
+      <label class="slot"><input type="radio" name="to" value="{{ hm(c.start) }}"{% if c.current %} disabled{% endif %} required>
+        {{ hm(c.start) }} to {{ hm(c.end) }}{% if c.start >= 1440 %} <small>(next day)</small>{% endif %}
+        {% if c.current %}<span class="dim">the time it has now</span>{% else %}<span class="lv lv-{{ c.level }}">{{ c.level|capitalize }} buffer</span>{% endif %}
+        {% if c.level == 'low' and not c.current %}<small class="slot-warn">Likely to be rejected: no spare cover in that interval.</small>{% endif %}
+        {% if not c.current %}{% for w in c.warnings %}<small class="slot-warn">{{ w }}</small>{% endfor %}{% endif %}
+        {% if c.off_warn and not c.current %}<small class="slot-warn">{{ c.off_pct|round|int }}% of the associates on shift would be off the queue then.</small>{% endif %}</label>
+      {% else %}<p class="empty">No other time is possible for this break: the shift and your other breaks leave none.</p>{% endfor %}
+    </fieldset>
+    <label>Why (optional) <input name="why" maxlength="200" autocomplete="off"></label>
+    <button class="primary">Send to the RTA</button>
+  </form>
+</section>
+{% endif %}
+
+{% if tomorrow and tseg %}
+<section class="panel" aria-labelledby="tomorrow-h">
+  <h2 id="tomorrow-h">Tomorrow, {{ tomorrow.on.strftime('%A') }}: {{ tomorrow.label }}</h2>
+  <p class="note">You can ask to move a break for today and tomorrow. Later days: see them on the Weeks tab.</p>
+  <table class="runs small">
+    <thead><tr><th scope="col">Break</th><th scope="col">Planned</th><th scope="col">Length</th><th scope="col"><span class="sr-only">Change</span></th></tr></thead>
+    <tbody>{% for b in tseg.breaks %}<tr><th scope="row">{{ b.kind }}</th><td>{{ hm(b.start) }}{% if b.moved %} (moved){% endif %}</td><td>{{ b.minutes }} min</td>
+      <td>{% if requests_on %}<a href="{{ url_for('me_breaks', day='tomorrow', change=b.idx) }}#change">Change</a>{% else %}<span class="dim">Not on</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="empty">No breaks planned yet.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if mine %}
+<section class="panel" aria-labelledby="mine-h">
+  <h2 id="mine-h">My requests</h2>
+  <ul class="log">{% for r in mine %}<li><b>{{ r.what }}</b> on {{ r.on.strftime('%a %d %b') }}: {{ r.status_words }}{% if r.decision %}. “{{ r.decision }}”{% endif %}{% if r.outcome %}. {{ r.outcome }}{% endif %}
+    {% if r.status == 'waiting' and r.kind == 'break' %}<form method="post" action="{{ url_for('me_breaks_cancel', request_id=r.id) }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="quiet">Cancel</button></form>{% endif %}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% endblock %}
+{% block live %}{% from '_live.html' import watch %}{{ watch('me', 'reload') }}{% endblock %}

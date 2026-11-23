@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from .cellsafe import keep_text
 from .channels import hm
 
 NAMES = {"P": "Phone", "C": "Chat", "E": "Email", "A": "All channels", "B": "Break", "L": "Lunch"}
@@ -62,6 +63,8 @@ def channel_plan_workbook(label: str, days: List[Tuple[str, Dict[str, Any]]]) ->
         for i in range(2, len(grid["cols"]) + 2):
             line.column_dimensions[get_column_letter(i)].width = 3.2
         line.freeze_panes = "B2"
+        keep_text(table)  # names and languages come from the uploaded workbook: text stays text (audit 2026-11-11)
+        keep_text(line)
     week = wb.create_sheet("Week")
     week.append(["Associate", "Phone h", "Chat h", "Email h", "All channels h"])
     for cell in week[1]:
@@ -69,6 +72,7 @@ def channel_plan_workbook(label: str, days: List[Tuple[str, Dict[str, Any]]]) ->
     for name in sorted(totals):
         week.append([name] + [round(totals[name].get(c, 0) / 60, 2) for c in "PCEA"])
     week.column_dimensions["A"].width = 22
+    keep_text(week)
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

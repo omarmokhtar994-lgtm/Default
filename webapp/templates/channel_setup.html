@@ -1,6 +1,7 @@
 {# © 2026 Omar Mokhtar. All rights reserved. #}
 {% extends "base.html" %}
 {% block title %}Associate channels: {{ program.name }} on Team Scheduler{% endblock %}
+{% from "_macros.html" import list_mode %}
 {% block content %}
 <div class="phead"><div>
   <h1>Associate channels: {{ program.name }}</h1>
@@ -10,13 +11,14 @@
 {% if choices|length > 1 %}<form class="sel" method="get" action="{{ url_for('channel_setup') }}"><label>Program <select name="program" data-autosubmit>{% for name, k in choices %}<option value="{{ k }}"{% if name == program.name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label><noscript><button type="submit">Show</button></noscript></form>{% endif %}
 </div>
 
+{{ list_mode() }}
 <div class="side wl">
 <section class="panel" aria-labelledby="ac-h">
   <h2 id="ac-h">People{% if rows %} ({{ rows|length }}){% endif %}</h2>
   {% if rows %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="program" value="{{ key }}"><input type="hidden" name="action" value="save"><input type="hidden" name="rows" value="{{ rows|length }}">
-    <div class="scroll" role="region" tabindex="0" aria-label="Who can work which channel (scrolls sideways)"><table class="actable">
+    <div class="scroll panel-scroll" role="region" tabindex="0" aria-label="Who can work which channel (scrolls)"><table class="actable">
       <thead><tr><th scope="col">Associate</th><th scope="col">Language</th><th scope="col" class="c">Chat</th><th scope="col" class="c">Phone</th><th scope="col" class="c">Email</th><th scope="col">Channels</th></tr></thead>
       <tbody>
       {% for r in rows %}{% set i = loop.index0 %}

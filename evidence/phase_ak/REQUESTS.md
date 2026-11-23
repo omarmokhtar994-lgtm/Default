@@ -1,0 +1,62 @@
+# Phase AK: the owner's requests (2026-10-15, Egypt time)
+
+© 2026 Omar Mokhtar. All rights reserved.
+
+Noted from the owner's message of 2026-10-15 (about 20:00), with a photo of the live Timeline from 07:00. Nothing is
+built yet: visual changes get a sample first.
+
+Owner, verbatim: "Phone and email is very hard to be read on the timeline with those colors, shedule tab doesn't have
+times in filter or option. For fix the day, rescue, etc they should work on 24 hours based on day start at not fixed
+00;00. We need to create accounts under Team Manager role and i need a way to assign associates to specific leaders
+so they can approve their requests"
+
+| # | Request | Kind | Reading |
+| --- | --- | --- | --- |
+| 1 | Phone and Email are hard to read on the Timeline | visual | Phone (#3E6FD8) is drawn as a 10 px stripe on the blue shift bar (#3E6FD8 family), so it disappears; Email (#4D7D8D) is a low-contrast grey-teal. Sample ak01 offers three fixes |
+| 2 | The schedule tab has no "Times in" choice | change | Which page is to be confirmed (question 2) |
+| 3 | Fix the day's breaks, Rescue the day, Change several breaks work on 00:00 to 24:00 | change | They work on the 24 hours from "Day starts at", as the Timeline, board and Adherence do (Phase AI ruled they stay on the schedule's day; the owner now asks otherwise). Each change is kept on its shift's own date |
+| 4 | Team manager accounts; associates assigned to a leader who approves their requests | new | A "Supervisor" role already gives the first (TM) approval of leave and swaps, for every associate of the program. New: each associate can have one team manager; that team manager approves their requests |
+
+## Questions only the owner can answer
+
+1. Colours (sample ak01, light and dark): A (grey bar, Phone blue, Chat magenta, Email amber), B (blue bar, Phone
+   orange, Chat purple, Email green), C (as A with P, C, E written on longer stretches) or D (recommended: dark Phone
+   #1A47A8, mid Chat #C2549F, light green Email #A6D96A, with letters)? Measured (better-colors): today Phone on the bar is
+   1.00:1 and the three channels 1.04 to 1.08:1 apart in lightness; B puts orange next to green (1.13:1, unreadable
+   with red-green colour blindness); white letters on C's amber are 2.76:1. D: channels 2.0 to 4.9:1 apart, letters
+   4.2:1 or more.
+2. "Schedule tab": the Schedules page in the menu (This week, Schedules), a run's schedule (Runs, a run, Schedules),
+   or another page?
+3. Team managers:
+   a. Rename the "Supervisor" role to "Team manager" (same powers), or a new "Team manager" role next to Supervisor
+      that only approves its own team's requests?
+   b. Where to assign: on the People page, a "Team manager" pick per associate (and a way to set many at once)?
+   c. Who else may approve an assigned associate's request when their team manager is away: nobody, or admins and
+      supervisors too?
+   d. An associate with no team manager assigned: any team manager of the program approves, as now?
+   e. Shift swaps: approved by the team manager of the person who offered, or of both people?
+
+## Design skills run on sample ak01 (2026-10-15)
+
+- better-colors: contrast measured (see question 1).
+- frontend-design with `webapp/DESIGN.md`: amber means "Short", so an amber Email (options A, C and the first D)
+  breaks "colour means state"; D's Email moved to light green #A6D96A (hue 88, 52 degrees from Short's amber, 86 from
+  Covered's teal; Phone 221 and Chat 319 at least 27 and 44 degrees from any status hue).
+- ui-ux-pro-max: no palette match for this case; its rule "never colour alone" keeps the P, C, E letters and the
+  hover titles.
+- design-taste-frontend: dashboards are outside its scope; its colour-consistency and both-looks rules apply.
+- impeccable (context loaded, mode Operate): scanning first; B's orange sits next to the red and amber status hues.
+- design-md: the catalog is brand sites, no ops-dashboard match; Linear's pattern (category colours kept apart from
+  action and status colours) supports D.
+
+## The owner's answers (2026-10-15, evening)
+
+1. Colours: D (dark blue Phone, pink Chat, light green Email, letters).
+2. Schedule tab: "schedules". The menu's Schedules list already has "Times in"; the schedule it opens does not, so
+   that page gets it (ruling, see the plan).
+3. Team managers: a new Team manager role; yes, a pick per associate on the People page and many at once; yes,
+   admins and supervisors may approve for an absent team manager; swaps need both team managers; and "to see where
+   it's pending". d was not answered: an associate with no team manager is approved by any team manager of the
+   program, as now (ruling).
+4. New: "i need to adjust as i wish the options they can have and supervisor can have and what they can have access
+   for etc make it adjustable": the admin sets what each role (Planner, Team manager, Supervisor) may see and do.

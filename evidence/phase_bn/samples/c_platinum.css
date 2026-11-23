@@ -1,0 +1,12 @@
+/* Look C, "Platinum" (graphite, no colour accent): a camera-body grey, hairlines instead of shadows, condensed figures like an instrument. */
+html:root:root {
+  --night: #16171A; --rail-bg: #111214; --console: #1F2125; --console-2: #26292E; --rail: #35383F; --paper: #F2F3F5; --dim: #A6ABB3;
+  --action: #F2F3F5; --action-hover: #FFFFFF; --on-action: #16171A; --edge: #6E747E; --selected: #2B2E34; --hi: #F2F3F5; --on-hi: #16171A;
+  --panel: #1F2125; --header: rgba(22, 23, 26, .96); --well: rgba(17, 18, 20, .7); --hover: rgba(242, 243, 245, .06); --shadow: rgba(0, 0, 0, .5);
+  --empty-cell: rgba(53, 56, 63, .6); --empty-key: #35383F; --code-bg: #111214; --r-panel: 6px; --r-ctl: 4px; --bg-line: transparent;
+  --page-bg: none; --page-field: #16171A; --h0: #26292E;
+}
+body { background-image: none; }
+.panel { border: 1px solid #35383F; box-shadow: none; }
+h1, h2, h3 { font-stretch: 78%; font-weight: 500; letter-spacing: .01em; }
+h1 { font-size: 2.5rem; }

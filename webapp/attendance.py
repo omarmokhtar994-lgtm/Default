@@ -1587,12 +1587,37 @@ class DayBook:
         from .access import Access  # here, not at the top: access is built on this module's neighbours
         from .approvals import team_manager_of
         found: Dict[str, Dict[str, Any]] = {}
-        for user in self.store.list_users():
+        users = self.store.list_users()
+        for user in users:
             if user["is_associate"] and user["active"] and user["roster_name"] and Access(self.store, user).can_open(program):
                 manager = team_manager_of(self.store, user["id"])
                 if manager:
                     found[user["roster_name"]] = {"id": manager["id"], "name": manager["display_name"]}
+        sheet = self.team_sheet(program)  # Phase BY: the LOB's team managers sheet for everyone the accounts leave out
+        if sheet:
+            fold = lambda s: " ".join(str(s or "").split()).casefold()  # noqa: E731
+            accounts: Dict[str, Dict[str, Any]] = {}
+            for u in users:
+                if u["is_team_manager"] and u["active"] and Access(self.store, u).can_open(program):
+                    accounts.setdefault(fold(u["display_name"]), u)
+                    accounts.setdefault(fold(u["username"]), u)
+            for name, tm in sheet.items():
+                if name not in found:
+                    u = accounts.get(fold(tm))
+                    found[name] = {"id": u["id"], "name": u["display_name"]} if u else {"id": f"n:{tm}", "name": tm}
         return found
+
+    def team_sheet(self, program: str) -> Dict[str, str]:
+        """Phase BY: the LOB's team managers sheet as kept (roster name -> team manager), {} when none."""
+        try:
+            kept = json.loads(self.store.get_app_setting(f"team_sheet:{program}", "") or "{}")
+        except ValueError:
+            return {}
+        return {str(k): str(v) for k, v in kept.items()} if isinstance(kept, dict) else {}
+
+    def set_team_sheet(self, program: str, mapping: Dict[str, str]) -> None:
+        """Phase BY: keep the sheet (replacing the one before); {} removes it."""
+        self.store.set_app_setting(f"team_sheet:{program}", json.dumps(mapping, sort_keys=True) if mapping else "")
 
     def days_off_panel(self, program: str, on: date) -> Dict[str, Any]:
         """Phase BW: the RTA's Days off tab. Everyone off on ``on`` and not called in yet, with their working span the day before and after

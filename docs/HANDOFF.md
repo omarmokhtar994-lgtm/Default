@@ -612,6 +612,17 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase BY (owner, 2026-11-23): the roster name to team manager sheet
+- After BX's filter showed nothing on the server (no associate accounts linked), the owner chose "Yes build the roster name to team manager sheet".
+  `webapp/team_sheet.py` reads two columns, Roster name and Team manager (.xlsx or .csv, with the people sheet's safe reader and card-number check;
+  two team managers for one name, missing headings, empty, names over 80 characters are refused in words) and writes it back. Kept per LOB as JSON in
+  `app_settings` under `team_sheet:<LOB key>` (`DayBook.team_sheet` / `set_team_sheet`). A LOB renamed later loses its sheet (upload it again).
+- `DayBook.team_of`: an account's team manager comes first (approvals use it); the sheet fills the rest; a sheet name that is an active team manager
+  account of the program (display name or username, any case) joins that account's id, else its key is `n:<name>`.
+- On the Timeline, under the filter: "Team managers sheet" (download for `rta_view`; upload, replace and remove for `setup`). Routes `day_team_sheet`
+  (POST /day/teams) and `day_team_sheet_xlsx`; audit labels `team_sheet_saved` / `team_sheet_removed`; route map regenerated (two routes added).
+  Tests: `test_by_team_sheet.py`, `ThePhaseAAInTheBrowser.test_phase_by_team_managers_sheet`.
+
 ## Phase BX (owner, 2026-11-23): filter by team manager, and the team manager beside each name
 - "Add a small filter same as the one per shift start with team manager, and add team manager name next to associates in smaller text just for reference
   and easier search." `DayBook.team_of(program)`: roster name -> the team manager on the associate's account (an active associate account with that

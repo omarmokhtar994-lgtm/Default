@@ -500,6 +500,22 @@
    []
   ],
   [
+   "/day/teams",
+   "day_team_sheet",
+   [
+    "POST"
+   ],
+   []
+  ],
+  [
+   "/day/teams.xlsx",
+   "day_team_sheet_xlsx",
+   [
+    "GET"
+   ],
+   []
+  ],
+  [
    "/day/undo",
    "day_undo",
    [

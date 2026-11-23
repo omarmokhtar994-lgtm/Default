@@ -22,6 +22,7 @@ from ..clock import EGYPT, HOME, ZONES, minute_now, moved_text, noon_gap, pick_z
 from ..contacts import ContactBook, pick_contact
 from ..daily_views import people_of, workbook as daily_workbook
 from ..day import ABSENT as ABSENT_STATES, AUX, BIO, EXTRA_BREAKS, MEASURES, OVERTIME_MAX, STATUSES, at_target, board, glance, hover_tips, now_panel, shift_groups, team_groups, wall_extra, window_view
+from .. import team_sheet
 from ..handover import note as handover_note
 from ..merged_day import merged_page
 from ..notify import SERVICES, leave_out
@@ -324,7 +325,7 @@ def register(app, ctx) -> None:
                     finder["error"] = str(exc)
         clock_now = A.datetime.now(ZoneInfo(own_zone))
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
-        shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None, "tm_groups": [], "tm": "", "tm_label": "", "team": {}}
+        shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None, "tm_groups": [], "tm": "", "tm_label": "", "team": {}, "team_sheet_n": 0}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
             wanted = request.args.get("shift", "").strip()
             wanted = wanted if wanted == "earlier" or re.match(r"^([01]\d|2[0-3]):[0-5]\d$", wanted) else ""
@@ -342,7 +343,7 @@ def register(app, ctx) -> None:
             if picked:
                 names = set(picked["names"]) if names is None else names & set(picked["names"])
             shift_view.update({"tm_groups": tms, "tm": tm, "tm_label": picked["label"] if picked else "", "shift_names": names,
-                               "team": {n: x["name"] for n, x in team.items()}})
+                               "team": {n: x["name"] for n, x in team.items()}, "team_sheet_n": len(days.team_sheet(program))})
         outside: Dict[str, Any] = {"rows": [], "prev": [], "roles": COVER_ROLES, "channels": [], "languages": []}
         if page and tab == "cover":
             cover = days.offers(page, from_now)
@@ -1030,6 +1031,53 @@ def register(app, ctx) -> None:
         except ValueError as exc:
             _say(f"No changes were saved: {exc}", program, on)
         return _back_to_day(program, on, "channels")
+
+    @app.route("/day/teams", methods=["POST"])
+    @login_required
+    def day_team_sheet():  # type: ignore[no-untyped-def]
+        """Phase BY: keep (or remove) the LOB's team managers sheet, two columns: Roster name and Team manager."""
+        program, on = clean_program(request.form.get("program", "")), _date(request.form.get("date", ""))
+        if not program:
+            abort(400)
+        back = redirect(url_for("day_page", program=program, date=on.isoformat() if on else None), code=303)
+        days = _days()
+        if request.form.get("clear") == "1":
+            days.set_team_sheet(program, {})
+            ctx._record("team_sheet_removed", program=program, subject=program, detail="team managers sheet removed")
+            flash("Team managers sheet removed.")
+            return back
+        upload = request.files.get("sheet")
+        if upload is None or not upload.filename:
+            flash(team_sheet.NOT_A_SHEET)
+            return back
+        try:
+            mapping = team_sheet.read(upload.read(), upload.filename)
+        except ValueError as exc:
+            flash(str(exc))
+            return back
+        days.set_team_sheet(program, mapping)
+        ctx._record("team_sheet_saved", program=program, subject=program, detail=f"{len(mapping)} people")
+        managers = len(set(mapping.values()))
+        flash(f"Team managers sheet kept: {len(mapping)} {'person' if len(mapping) == 1 else 'people'}, "
+              f"{managers} team manager{'s' if managers != 1 else ''}.")
+        if on is not None:
+            listed = {name for name, _ in days.roster(program, on)}
+            missing = sorted(n for n in mapping if listed and n not in listed)
+            if missing:
+                flash(f"{len(missing)} {'name is' if len(missing) == 1 else 'names are'} not on this week's schedule: "
+                      f"{', '.join(missing[:10])}{', and more' if len(missing) > 10 else ''}.")
+        return back
+
+    @app.route("/day/teams.xlsx")
+    @login_required
+    def day_team_sheet_xlsx():  # type: ignore[no-untyped-def]
+        """Phase BY: the LOB's team managers sheet as kept (a template with an example row when there is none)."""
+        program = clean_program(request.args.get("program", ""))
+        if not program:
+            abort(400)
+        return send_file(io.BytesIO(team_sheet.workbook(_days().team_sheet(program))), as_attachment=True,
+                         download_name="team_managers.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     @app.route("/day/daily-views.xlsx")
     @login_required

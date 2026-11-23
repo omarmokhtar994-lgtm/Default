@@ -2594,6 +2594,7 @@ AA_SCREENS = Path(__file__).resolve().parents[2] / "evidence" / "phase_aa" / "sc
 BV_SCREENS = REPO / "evidence" / "phase_bv" / "screens"
 BW_SCREENS = REPO / "evidence" / "phase_bw" / "screens"
 BX_SCREENS = REPO / "evidence" / "phase_bx" / "screens"
+BY_SCREENS = REPO / "evidence" / "phase_by" / "screens"
 
 
 class ThePhaseAAInTheBrowser(unittest.TestCase):
@@ -2758,6 +2759,32 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
             expect(page.locator(".tl-lane .tl-who")).to_have_count(4)
             expect(page.get_by_role("group", name="Filter by team manager").get_by_role("link", name="Team Manager 01")).to_have_attribute("aria-current", "true")
             self.assertEqual(errors, [])
+
+    def test_phase_by_team_managers_sheet(self):
+        # Phase BY (owner, 2026-11-23: "build the roster name to team manager sheet"): upload it on the Timeline, the filter and names follow
+        import csv as _csv
+        days = self.app.extensions["days"]
+        lanes = [l["name"] for l in days.page(self.key, self.wed)["view"]["lanes"]]
+        sheet = self.dir / "teams.csv"
+        with open(sheet, "w", newline="") as f:
+            _csv.writer(f).writerows([["Roster name", "Team manager"]] + [[n, "Team Lead C"] for n in lanes[8:12]])
+        BY_SCREENS.mkdir(parents=True, exist_ok=True)
+        page = self.page(width=1440, height=1100)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}", errors)
+        box = page.locator("details.team-sheet")
+        box.locator("summary").click()
+        box.locator("input[name=sheet]").set_input_files(str(sheet))
+        box.screenshot(path=str(BY_SCREENS / "team_sheet_box.png"))
+        box.get_by_role("button", name="Upload").click()
+        page.wait_for_load_state("load")
+        expect(page.locator("p.flash").first).to_contain_text("Team managers sheet kept: 4 people, 1 team manager.")
+        expect(page.get_by_role("group", name="Filter by team manager").get_by_role("link", name="Team Lead C")).to_be_visible()
+        expect(page.locator(".tl-who .tl-tm", has_text="Team Lead C")).to_have_count(4)
+        days.set_team_sheet(self.key, {})
+        self.assertEqual(errors, [])
 
     def test_phase_aa_screens(self):
         page = self.page(width=1440, height=900)

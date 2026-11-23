@@ -618,6 +618,8 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
   attendance boxes show a disabled "Not checked" option, selected, with an amber edge (`select.att.unchecked`); picking Present saves a record (as
   before) and the edge goes. They still count on the floor exactly as before (the floor's numbers do not change). The shift-start and team manager
   chips add "N not checked" (`unchecked` in `shift_groups` / `team_groups`). The first label, "Present (not checked)", was cut off in the box.
+- Owner, same day: "only today and future days and thing before today not checked should be present". `checking = on >= today` (the page's day
+  against the program's own clock) in `routes/day.py`; on an earlier day the boxes show Present and the chips count nobody not checked.
 - Re-pinned with the reason: `ThePhaseXYInTheBrowser.present_lane` marks the first people Present before its keyboard tests (they start from a checked
   Present). Tests: `test_ca_present_unchecked.py`, `ThePhaseAAInTheBrowser.test_phase_ca_present_not_checked`.
 - Patch work after the 2026-11-19 package: build patches against the installed package `7f684958...` (kept as `INSTALLED_BASE_7f684958.zip` in the

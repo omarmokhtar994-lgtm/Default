@@ -325,17 +325,24 @@ def register(app, ctx) -> None:
                     finder["error"] = str(exc)
         clock_now = A.datetime.now(ZoneInfo(own_zone))
         from_now = clock_now.hour * 60 + clock_now.minute if clock_now.date() == on else 0
+        checking = on >= clock_now.date()  # Phase CA: "Not checked" on today and later only; an earlier day shows Present as before
         shift_view: Dict[str, Any] = {"shift_groups": [], "shift": "", "shift_names": None, "tm_groups": [], "tm": "", "tm_label": "", "team": {}, "team_sheet_n": 0}
         if page and tab == "timeline":  # the Timeline by shift start (Phase W)
             wanted = request.args.get("shift", "").strip()
             wanted = wanted if wanted == "earlier" or re.match(r"^([01]\d|2[0-3]):[0-5]\d$", wanted) else ""
             groups = shift_groups(page["view"], from_now if clock_now.date() == on else None)
+            if not checking:
+                for x in groups:
+                    x["unchecked"] = 0
             chosen = next((g for g in groups if g["key"] == wanted), None)
             shift_view = {"shift_groups": groups, "shift": wanted,
                           "shift_names": set(chosen["names"]) if chosen else (set() if wanted else None)}
             # Phase BX: the team manager filter, beside the shift starts; both together show the people in both
             team = days.team_of(program, on)  # Phase BZ: the schedule's TL column too
             tms = team_groups(page["view"], team)
+            if not checking:
+                for x in tms:
+                    x["unchecked"] = 0
             tm = request.args.get("tm", "").strip()
             picked = next((x for x in tms if x["key"] == tm), None)
             tm = picked["key"] if picked else ""
@@ -505,7 +512,7 @@ def register(app, ctx) -> None:
                                log_page=ctx._paged(list(reversed(page["log"])) if page else [], "log_page", "daylog-h"),
                                proposal=proposal, fresh=fresh, passed=passed, from_now=from_now, cover_panel=cover_panel,
                                tile_now=now_at if window else (from_now if clock_now.date() == on else None),
-                               add_panel=add_panel, daysoff=daysoff, person_panel=person_panel, lengths=ADD_LENGTHS, ot_lengths=OT_LENGTHS, bar=bar,
+                               add_panel=add_panel, daysoff=daysoff, person_panel=person_panel, checking=checking, lengths=ADD_LENGTHS, ot_lengths=OT_LENGTHS, bar=bar,
                                overtime_hours=OVERTIME_MAX // 60,
                                bulk=bulk, shifts=BULK_SHIFTS, bulk_verb=bulk_verb, rescue=rescue, dayoff=dayoff, chfix=chfix,
                                team_names=sorted({u["display_name"] for u in app.extensions["store"].list_users()

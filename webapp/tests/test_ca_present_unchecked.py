@@ -3,12 +3,23 @@
 can we name the default like present default and they change it to present manually?"). Someone with no attendance saved for a shift shows
 "Not checked" with an amber edge; picking Present saves it as checked. Until then they still count on the floor as before (the floor's
 numbers do not change), and the shift-start and team manager filters say how many are not checked. Made-up people."""
+import datetime as dt
 import html
 import re
 import unittest
+from unittest import mock
 
 from webapp.day import shift_groups, team_groups
 from webapp.tests.test_overtime_side import WED, _Overtime
+
+
+def clock_on(day):
+    """The website's clock stopped on ``day`` at 10:00 (the page's own zone)."""
+    class _Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(day.year, day.month, day.day, 10, 0, tzinfo=tz)
+    return mock.patch("webapp.app.datetime", _Clock)
 
 
 class TheDefault(_Overtime):
@@ -28,8 +39,11 @@ class TheDefault(_Overtime):
     def someone(self):
         return next(l["name"] for l in self.view()["lanes"] if any(s["offset"] == 0 for s in l["segments"]))
 
-    def timeline(self):
-        return html.unescape(self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}").get_data(as_text=True))
+    def timeline(self, today=WED):
+        # Re-pinned 2026-11-23 (owner: "only today and future days ... before today not checked should be present"): "Not checked" shows when the
+        # page's day is today or later, so these page checks stop the clock on the made-up Wednesday (it is in the past by the real clock).
+        with clock_on(today):
+            return html.unescape(self.client.get(f"/day?program={self.key.replace(' ', '+')}&date={WED.isoformat()}").get_data(as_text=True))
 
     def select_of(self, page, name):
         return re.search(rf'(?s)<b title="{name}">.*?(<select class="att[^"]*".*?</select>)', page).group(1)
@@ -76,6 +90,19 @@ class TheDefault(_Overtime):
         self.assertEqual([g["unchecked"] for g in team_groups(view, team)], [everyone - 1])
         page = self.timeline()
         self.assertRegex(page, r"(?s)aria-label=\"Filter by shift start\">.*?, <em class=\"uncheck\">\d+ not checked</em>")
+
+
+    def test_a_day_before_today_shows_present_as_before(self):
+        name = self.someone()
+        page = self.timeline(today=WED + dt.timedelta(days=1))
+        sel = self.select_of(page, name)
+        self.assertRegex(sel, r'^<select class="att"')
+        self.assertNotIn("Not checked", sel)
+        self.assertIn('<option value="Present" selected>Present</option>', sel)
+        self.assertNotIn("not checked</em>", page)
+
+    def test_a_day_after_today_shows_not_checked(self):
+        self.assertIn("Not checked", self.select_of(self.timeline(today=WED - dt.timedelta(days=1)), self.someone()))
 
 
 if __name__ == "__main__":

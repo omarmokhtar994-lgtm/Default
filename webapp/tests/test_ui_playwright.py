@@ -2800,13 +2800,16 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_phase_ca_present_not_checked(self):
-        # Phase CA (owner, 2026-11-23): "Not checked" with an amber edge until the RTA picks Present
-        days = self.app.extensions["days"]
+        # Phase CA (owner, 2026-11-23): "Not checked" with an amber edge until the RTA picks Present, on today and later days only, so the
+        # page is today's (the schedule covers this week); a day before today shows Present as before (test_ca_present_unchecked)
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+        today = _dt.now(ZoneInfo("Africa/Cairo")).date()
         page = self.page(width=1440, height=1000)
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.sign_in(page)
-        self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}", errors)
+        self.go(page, f"/day?program={self.q}&date={today.isoformat()}", errors)
         box = page.locator(".tl-lane select.att.unchecked").first
         expect(box.locator("option:checked")).to_have_text("Not checked")
         name, when = box.get_attribute("data-name"), box.get_attribute("data-date")   # the shift's own day (last night's shift: the day before)

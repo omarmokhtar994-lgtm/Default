@@ -2014,6 +2014,16 @@ class ThePhaseXYInTheBrowser(unittest.TestCase):
     def present_lane(self, page, skip=0):
         """The attendance box of a lane showing Present (the skip-th one) whose shift starts on the page's day, and
         its person. A shift from the Saturday before belongs to a week with no schedule here, so it cannot be marked."""
+        # Phase CA (owner, 2026-11-23): nobody is checked Present until the RTA picks it ("Not checked"); these keyboard tests start
+        # from a checked Present as before, so the first few people of the day are marked Present here, then the page is read again.
+        names = page.evaluate("day => [...document.querySelectorAll('.tl-lane select.att')]"
+                              ".filter(s => s.value === '' && s.dataset.date === day).map(s => s.dataset.name)", self.sunday.isoformat())
+        days = self.app.extensions["days"]
+        for n in names[:skip + 1]:
+            days.set_status(self.key, self.sunday, n, "Present", 1)
+        if names:
+            page.reload()
+            page.wait_for_load_state("load")
         i = page.evaluate("([skip, day]) => [...document.querySelectorAll('.tl-lane select.att')]"
                           ".map((s, k) => s.value === 'Present' && s.dataset.date === day ? k : -1)"
                           ".filter(k => k >= 0)[skip]", [skip, self.sunday.isoformat()])
@@ -2595,6 +2605,7 @@ BV_SCREENS = REPO / "evidence" / "phase_bv" / "screens"
 BW_SCREENS = REPO / "evidence" / "phase_bw" / "screens"
 BX_SCREENS = REPO / "evidence" / "phase_bx" / "screens"
 BY_SCREENS = REPO / "evidence" / "phase_by" / "screens"
+CA_SCREENS = REPO / "evidence" / "phase_ca" / "screens"
 
 
 class ThePhaseAAInTheBrowser(unittest.TestCase):
@@ -2784,6 +2795,30 @@ class ThePhaseAAInTheBrowser(unittest.TestCase):
         expect(page.get_by_role("group", name="Filter by team manager").get_by_role("link", name="Team Lead C")).to_be_visible()
         expect(page.locator(".tl-who .tl-tm", has_text="Team Lead C")).to_have_count(4)
         days.set_team_sheet(self.key, {})
+        self.assertEqual(errors, [])
+
+    def test_phase_ca_present_not_checked(self):
+        # Phase CA (owner, 2026-11-23): "Not checked" with an amber edge until the RTA picks Present
+        days = self.app.extensions["days"]
+        page = self.page(width=1440, height=1000)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.sign_in(page)
+        self.go(page, f"/day?program={self.q}&date={self.wed.isoformat()}", errors)
+        box = page.locator(".tl-lane select.att.unchecked").first
+        expect(box.locator("option:checked")).to_have_text("Not checked")
+        name, when = box.get_attribute("data-name"), box.get_attribute("data-date")   # the shift's own day (last night's shift: the day before)
+        CA_SCREENS.mkdir(parents=True, exist_ok=True)
+        page.locator(".tl-scroll").screenshot(path=str(CA_SCREENS / "present_not_checked.png"))
+        with page.expect_navigation():
+            box.select_option("Present")
+        page.wait_for_load_state("load")
+        mine = page.locator(f'.tl-lane select.att[data-name="{name}"]').first
+        expect(mine).to_have_value("Present")
+        expect(mine).not_to_have_class(re.compile(r"\bunchecked\b"))
+        self.assertTrue(any(r["associate"] == name and r["status"] == "Present" for r in self.store.list_attendance(self.key, [when])))
+        with self.store._db() as db:
+            db.execute("delete from attendance where program = ? and associate = ?", (self.key, name))
         self.assertEqual(errors, [])
 
     def test_phase_aa_screens(self):

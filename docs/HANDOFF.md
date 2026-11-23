@@ -612,6 +612,17 @@ The owner's screens showed a number on the hour and 0 on the half hour, no way t
 - Lesson: test runs leave an app folder in `/tmp` each (`tmpXXXXXXXX` with `scheduler.db`); 48,000 of them filled the disk and every test failed
   with "database or disk is full". Run tests with `TMPDIR` set to a folder you delete afterwards.
 
+## Phase CA (owner, 2026-11-23): "Not checked" until the RTA marks attendance
+- "associates by default on present which maybe missed by the RTA ... can we name the default like present default and they change it to present
+  manually?" A shift with no attendance record has `marked: False` in the day view (`day.py`, the lane segment). The Timeline's and the person dialog's
+  attendance boxes show a disabled "Not checked" option, selected, with an amber edge (`select.att.unchecked`); picking Present saves a record (as
+  before) and the edge goes. They still count on the floor exactly as before (the floor's numbers do not change). The shift-start and team manager
+  chips add "N not checked" (`unchecked` in `shift_groups` / `team_groups`). The first label, "Present (not checked)", was cut off in the box.
+- Re-pinned with the reason: `ThePhaseXYInTheBrowser.present_lane` marks the first people Present before its keyboard tests (they start from a checked
+  Present). Tests: `test_ca_present_unchecked.py`, `ThePhaseAAInTheBrowser.test_phase_ca_present_not_checked`.
+- Patch work after the 2026-11-19 package: build patches against the installed package `7f684958...` (kept as `INSTALLED_BASE_7f684958.zip` in the
+  session scratchpad; `dist/` is rebuilt by the full chain).
+
 ## Phase BZ (owner, 2026-11-23): the team manager from the schedule's TL column
 - "Why not taken from the schedule uploaded already?" The Schedule tab's TL column was already read (`versions.read_week`, "tl") and shown on the
   Schedules page, but BX looked only at accounts. `DayBook.team_of(program, on)` now adds the TL of the schedule in use that day for everyone the account

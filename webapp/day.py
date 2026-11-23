@@ -419,6 +419,7 @@ def day_view(week: Dict[str, Any], inputs: Dict[str, Any], day: int,
         lane["segments"].append({"offset": seg["offset"], "called_in": seg["called_in"], "label": seg["label"],
                                  "start": seg["start"],
                                  "end": seg["end"], "status": status, "billable": billable,
+                                 "marked": bool(mark),  # Phase CA: an attendance record saved for this shift (else "Not checked")
                                  "from": mark.get("from"), "to": mark.get("to"), "away": away, "breaks": breaks,
                                  "cancelled": cancelled,
                                  "activities": acts, "with_whom": mark.get("with_whom", ""),
@@ -1708,8 +1709,9 @@ def shift_groups(view: Dict[str, Any], from_now: Optional[int] = None) -> List[D
         group = groups.setdefault(key, {"key": key, "label": key if own else (
                                             f"Began before {_hm(view['start'])}" if view.get("start") else "From yesterday"),
                                         "start": seg["start"] if own else -10 ** 6, "people": 0, "late": 0, "off": 0,
-                                        "aux": 0, "names": [], "next": False})
+                                        "aux": 0, "unchecked": 0, "names": [], "next": False})
         group["people"] += 1
+        group["unchecked"] += int(not seg.get("marked", True))  # Phase CA
         group["names"].append(lane["name"])
         status = seg["status"]
         if status in ABSENT:
@@ -1737,8 +1739,9 @@ def team_groups(view: Dict[str, Any], team: Dict[str, Dict[str, Any]]) -> List[D
         tm = team.get(lane["name"])
         key = str(tm["id"]) if tm else "none"
         group = groups.setdefault(key, {"key": key, "label": tm["name"] if tm else "No team manager", "people": 0, "late": 0, "off": 0,
-                                        "aux": 0, "names": []})
+                                        "aux": 0, "unchecked": 0, "names": []})
         group["people"] += 1
+        group["unchecked"] += int(not seg.get("marked", True))  # Phase CA
         group["names"].append(lane["name"])
         status = seg["status"]
         if status in ABSENT:

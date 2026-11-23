@@ -1975,3 +1975,7 @@ td > input[type="checkbox"]:only-child, td > input[type="radio"]:only-child { wi
 /* Phase BX: the team manager beside an associate, small, for reference and Ctrl+F */
 .tl-tm { display: block; font-size: 0.6875rem; font-weight: 400; line-height: 1.15; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-day] .tl-who b:has(.tl-tm) { display: flex; flex-direction: column; line-height: 1.15; }  /* under the name, in the same cell: the name keeps its width */
+
+/* Phase CA: "Not checked": nobody has looked yet; an amber edge until the RTA picks Present (or anything else) */
+[data-day] select.att.unchecked { border-color: var(--short); box-shadow: inset 3px 0 0 var(--short); color: var(--short-ink); }
+.shiftbar small em.uncheck { font-style: normal; color: var(--short-ink); }
